@@ -1,4 +1,7 @@
 
+
+let Rf = 100;
+let eta = 1;
 class BrainSegment {
     value = 0;
     constructor(orientation, width) {
@@ -34,14 +37,19 @@ class Brain {
         if(this.parent.constructor.visionRadius > 0 && distance > this.parent.constructor.visionRadius)
             return;
 
-        if(angle < 0)
-            angle += Math.PI * 2;
 
         let reward = this.parent["Observe" + agent.constructor.name](agent) / (1 + Brain.distanceBias * distance);
         if(reward == 0)
             return;
         
-        let segment = Math.floor(this.N * angle / (Math.PI * 2));
+        this.AddReward(reward, angle);
+    }
+
+    AddReward(reward, orientation) {
+        if(orientation < 0)
+            orientation += Math.PI * 2;
+
+        let segment = Math.floor(this.N * orientation / (Math.PI * 2));
 
         let propogationLength = Math.ceil((this.N - 1)/2);
 
@@ -62,9 +70,29 @@ class Brain {
         }
     }
 
+    Vicsek(simulation) {
+        let sin = 0, cos = 0;
+
+        simulation.agents.forEach(agent => {
+            if(agent.constructor.name == "Rabbit") {
+                if (this.parent.position.periodicDistance(agent.position, simulation.width, simulation.height) < Rf) {
+                    cos += Math.cos(agent.orientation);
+                    sin += Math.sin(agent.orientation);
+                }
+            }
+        })
+        let orientation =  Math.atan2(sin, cos) + eta * (-0.5 + Math.random()) * simulation.dt;
+
+        this.AddReward(0.1, orientation);
+    }
+
     Evaluate(simulation) {
 
         this.Reset();
+
+        if(this.parent.constructor.name == "Rabbit") {
+            this.Vicsek(simulation);
+        }
 
         simulation.agents.forEach(agent => {
             if(this.parent != agent)
@@ -338,7 +366,8 @@ class Project extends Simulation {
     agents = [];
     dt = 0.01;
 
-    nFoxes = 10;
+    // nFoxes = 10;
+    nFoxes = 0;
     nRabbits = 50;
 
     eatChance = .8;
@@ -384,7 +413,8 @@ class Project extends Simulation {
     }
 
     EndCondition() {
-        return this.agentCount["Fox"] == 0 || this.agentCount["Rabbit"] == 0;
+        // return this.agentCount["Fox"] == 0 || this.agentCount["Rabbit"] == 0;
+        return this.agentCount["Rabbit"] == 0;
     }
 
     Title() {
