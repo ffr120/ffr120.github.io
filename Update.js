@@ -83,7 +83,7 @@ class Brain {
         })
         let orientation =  Math.atan2(sin, cos) + eta * (-0.5 + Math.random()) * simulation.dt;
 
-        this.AddReward(0.1, orientation);
+        this.AddReward(0.02, orientation);
     }
 
     Evaluate(simulation) {
@@ -129,6 +129,7 @@ class Brain {
 
 class Agent {
 
+    static reproductionFactor = 5;
     static IDs = 0;
     t_levy = 0;
     alive = true;
@@ -263,13 +264,13 @@ class Agent {
 class Rabbit extends Agent {
 
     static image = document.getElementById("rabbit");
-    static velocity = 30;
+    static velocity = 40;
     static radius = 15;
     static visionRadius = 0;
 
     static propagationChance = .6;
-    static propagationCooldown = 10;
-    static propagationWeight = .1;
+    static propagationCooldown = 3 * Agent.reproductionFactor / this.propagationChance;
+    static propagationWeight = .3;
     static antiClusteringWeight = -.2;
 
     constructor(parent, position) {
@@ -309,10 +310,10 @@ class Fox extends Agent {
     static visionRadius = 0;
 
     static propagationChance = .4;
-    static propagationCooldown = 25;
+    static propagationCooldown = Agent.reproductionFactor / this.propagationChance;
     
-    static nutritionValue = 15;
-    static starvationCooldown = 60;
+    static nutritionValue = 60;
+    static starvationCooldown = 150;
     static propagationWeight = .3;
     static antiClusteringWeight = -.2;
 
@@ -366,8 +367,8 @@ class Project extends Simulation {
     agents = [];
     dt = 0.01;
 
-    // nFoxes = 10;
-    nFoxes = 0;
+    nFoxes = 10;
+    // nFoxes = 0;
     nRabbits = 50;
 
     eatChance = .8;
@@ -413,8 +414,8 @@ class Project extends Simulation {
     }
 
     EndCondition() {
-        // return this.agentCount["Fox"] == 0 || this.agentCount["Rabbit"] == 0;
-        return this.agentCount["Rabbit"] == 0;
+        return this.agentCount["Fox"] == 0 || this.agentCount["Rabbit"] == 0;
+        // return this.agentCount["Rabbit"] == 0;
     }
 
     Title() {
