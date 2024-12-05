@@ -83,7 +83,7 @@ class Brain {
         })
         let orientation =  Math.atan2(sin, cos) + eta * (-0.5 + Math.random()) * simulation.dt;
 
-        this.AddReward(0.02, orientation);
+        this.AddReward(0.1, orientation);
     }
 
     Evaluate(simulation) {
@@ -92,6 +92,9 @@ class Brain {
 
         if(this.parent.constructor.name == "Rabbit") {
             this.Vicsek(simulation);
+            simulation.carrots.forEach(carrot => {
+                this.Observe(carrot)
+            })
         }
 
         simulation.agents.forEach(agent => {
@@ -139,6 +142,8 @@ class Agent {
     targetOrientation = Math.random() * Math.PI * 2;
 
     constructor(parent, position) {
+
+        this.cooldowns.starvation = this.constructor.starvationCooldown * 0.75;
         this.parent = parent;
         this.position = position;
         this.ID = Agent.IDs++;
@@ -172,14 +177,11 @@ class Agent {
     static Tick(simulation, agent) {
         
         agent.Intent(simulation);
-
-        for(let cooldown in agent.cooldowns) {
-            if(agent.cooldowns[cooldown] > 0)
-                agent.cooldowns[cooldown] -= simulation.dt;
-            else agent.cooldowns[cooldown] = 0;
-        }
-
         agent.Tick(simulation);
+        agent.DecreaseCooldowns(simulation.dt);
+
+        if(agent.cooldowns["starvation"] == 0)
+            agent.alive = false;
     }
 
     Levy(dt) {
@@ -202,8 +204,18 @@ class Agent {
         this.newPosition = this.position["+"](this.constructor.velocity * Math.cos(this.orientation) * dt, this.constructor.velocity * Math.sin(this.orientation) * dt);
     }
 
-    Set() {
-        this.position = this.newPosition;
+    SetPosition(simulation) {
+        this.position["="](this.newPosition);
+
+        if(this.position.x > simulation.width)
+            this.position.x -= simulation.width;
+        else if(this.position.x < 0)
+            this.position.x += simulation.width;
+
+        if(this.position.y > simulation.height)
+            this.position.y -= simulation.height;
+        else if(this.position.y < 0)
+            this.position.y += simulation.height;
     }
 
     Interact(agent, simulation) {
@@ -224,12 +236,9 @@ class Agent {
                         agent.cooldowns["propagation"] = this.constructor.propagationCooldown;
                         simulation.interactionTracker[simulation.InteractionID(newAgent, this)] = simulation.interactionCooldown;
                         simulation.interactionTracker[simulation.InteractionID(newAgent, agent)] = simulation.interactionCooldown;
-
-                        if(this.constructor.name == "Fox") {
-                            newAgent.cooldowns["starvation"] = this.constructor.nutritionValue * 2;
-                            agent.cooldowns["starvation"] -= this.constructor.nutritionValue;
-                            this.cooldowns["starvation"] -= this.constructor.nutritionValue;
-                        }
+                        newAgent.cooldowns["starvation"] = this.constructor.birthCost * 2;
+                        agent.cooldowns["starvation"] -= this.constructor.birthCost;
+                        this.cooldowns["starvation"] -= this.constructor.birthCost;
 
                         simulation.agents.push(newAgent);
                     }
@@ -240,11 +249,11 @@ class Agent {
                 if(Math.random() < simulation.eatChance) {
 
                     if(this.constructor.name == "Rabbit") {
-                        agent.cooldowns["starvation"] += 5;
+                        agent.cooldowns["starvation"] += Rabbit.nutritionValue;
                         this.alive = false;
                     }
                     else {
-                        this.cooldowns["starvation"] += 5;
+                        this.cooldowns["starvation"] += Rabbit.nutritionValue;
                         agent.alive = false;
                     }
                 }
@@ -252,12 +261,45 @@ class Agent {
         }
     }
 
-    Birth() {
-        return Math.PI * 2 * this.cooldowns["propagation"] / this.constructor.propagationCooldown;
-    }
-
     CooldownScale(cooldown) {
         return (this.constructor[cooldown + "Cooldown"] - this.cooldowns[cooldown]) / this.constructor[cooldown + "Cooldown"];
+    }
+
+    DecreaseCooldowns(dt) {
+        for(let cooldown in this.cooldowns) {
+            if(this.cooldowns[cooldown] > this.constructor[cooldown + "Cooldown"])
+                this.cooldowns[cooldown] = this.constructor[cooldown + "Cooldown"];
+            
+            if(this.cooldowns[cooldown] > 0)
+                this.cooldowns[cooldown] -= dt;
+            else this.cooldowns[cooldown] = 0;
+        }
+    }
+
+    Draw(position) {
+
+        let radius = this.constructor.radius;
+        let visionRadius = this.constructor.visionRadius;
+        let image = this.constructor.image;
+        
+        Circle(position, radius, {fill: "rgb(0, 0, 250, .2)"});
+        Circle(position, radius, {fill: "rgb(0, 0, 250, .2)", end: Math.PI * 2 * (1 - this.CooldownScale("propagation"))});
+        Circle(position, radius + 4, {stroke: "rgb(250, 0, 0, .5)", end: Math.PI * 2 * (1 - this.CooldownScale("starvation")), lineWidth: 4});
+        Image(position, radius, radius, this.orientation, image)
+        this.brain.Draw(position, radius + 8);
+
+        if(visionRadius > 0)
+            Circle(position, radius + visionRadius, {stroke: "rgb(0, 0, 250, .2)"});
+    }
+
+    Eat(object) {
+
+        if(!object.alive)
+            return;
+
+        object.alive = false;
+        
+        this.cooldowns["starvation"] += object.constructor.nutritionValue;
     }
 }
 
@@ -272,13 +314,23 @@ class Rabbit extends Agent {
     static propagationCooldown = 3 * Agent.reproductionFactor / this.propagationChance;
     static propagationWeight = .3;
     static antiClusteringWeight = -.2;
+    static starvationCooldown = 60;
+    static nutritionValue = 60;
+    static birthCost = 30;
 
     constructor(parent, position) {
         super(parent, position);
     }
 
     Tick(simulation) {
+        simulation.carrots.forEach(carrot => {
+            if(this.position.periodicDistance(carrot.position) < Rabbit.radius + Carrot.radius)
+                this.Eat(carrot);
+        });
+    }
 
+    ObserveCarrot(carrot) {
+        return .2;
     }
 
     ObserveFox(agent) {
@@ -289,16 +341,6 @@ class Rabbit extends Agent {
         if(!this.parent.CanInteract(this, agent) || this.CooldownScale("propagation") < 1 || agent.CooldownScale("propagation") < 1)
             return Rabbit.antiClusteringWeight;
         return Rabbit.propagationWeight;
-    }
-
-    Draw(position) {
-        Circle(position, Rabbit.radius, {fill: "rgb(0, 0, 250, .2)"});
-        Circle(position, Rabbit.radius, {fill: "rgb(0, 0, 250, .2)", end: this.Birth()});
-        Image(position, Rabbit.radius, Rabbit.radius, this.orientation, Rabbit.image)
-        this.brain.Draw(position, Rabbit.radius);
-
-        if(Rabbit.visionRadius > 0)
-            Circle(position, Rabbit.radius + Rabbit.visionRadius, {stroke: "rgb(0, 0, 250, .2)"});
     }
 }
 
@@ -312,22 +354,25 @@ class Fox extends Agent {
     static propagationChance = .4;
     static propagationCooldown = Agent.reproductionFactor / this.propagationChance;
     
-    static nutritionValue = 60;
     static starvationCooldown = 150;
     static propagationWeight = .3;
     static antiClusteringWeight = -.2;
+    static birthCost = 30;
 
     constructor(parent, position) {
         super(parent, position);
-
-        this.cooldowns.starvation = Fox.starvationCooldown * 0.75;
     }
 
     Tick(simulation) {
-        if(this.cooldowns["starvation"] == 0)
-            this.alive = false;
-        else if(this.cooldowns["starvation"] > Fox.starvationCooldown)
-            this.cooldowns["starvation"] = Fox.starvationCooldown;
+
+    }
+
+    InteractFox(agent) {
+
+    }
+
+    InteractRabbit(agent) {
+
     }
 
     ObserveFox(agent) {
@@ -342,137 +387,71 @@ class Fox extends Agent {
             return 0;
         return this.CooldownScale("starvation");
     }
-    
-    Draw(position) {
+}
 
-        Circle(position, Fox.radius, {fill: "rgb(0, 0, 250, .2)"});
-        Circle(position, Fox.radius, {fill: "rgb(0, 0, 250, .2)", end: this.Birth()});
-        Circle(position, Fox.radius + 4, {stroke: "rgb(250, 0, 0, .5)", end: Math.PI * 2 * (1 - this.CooldownScale("starvation")), lineWidth: 4});
-        this.brain.Draw(position, Fox.radius + 8);
-        
-        Image(position, Fox.radius, Fox.radius, this.orientation, Fox.image)
-        if(Fox.visionRadius > 0)
-            Circle(position, Fox.radius + Fox.visionRadius, {stroke: "rgb(0, 0, 250, .2)"});
+class Carrot {
+    
+    static nutritionValue = 10;
+    static radius = 10;
+
+    alive = true;
+    constructor(position) {
+        this.position = position;
+        this.orientation = Math.random() * 2 * Math.PI;
+    }
+
+    Draw() {
+        Circle(this.position, Carrot.radius, {fill: "rgb(220, 140, 20, 1)"});
+        Circle(this.position, Carrot.radius * .8, {fill: "rgb(250, 170, 50, 1)"});
+        Circle(this.position, Carrot.radius * .4, {fill: "rgb(130, 220, 70, 1)"});
     }
 }
 
 class Project extends Simulation {
 
-    T = [];
-    Rabbits = [];
-    Foxes = [];
     interactionTracker = {};
-
     agentCount = {Fox: 0, Rabbit: 0};
     agents = [];
     dt = 0.01;
 
     nFoxes = 10;
-    // nFoxes = 0;
     nRabbits = 50;
+    nCarrots = 60;
 
     eatChance = .8;
     interactionCooldown = 8;
+    carrots = [];
 
 
     constructor(position, width, height, updatesPerTick) {
         super(position, width, height, "Inbreeding Simulator", updatesPerTick)
 
-        // this.fox = new Fox(this, new Vec2(200, 100, this.position));
-        // let rabbit = new Rabbit(this, new Vec2(100, 100, this.position));
-        // this.agents.push(this.fox);
-        // this.agents.push(rabbit);
-        // this.agents.push(new Rabbit(this, new Vec2(300, 100, this.position)));
-        // this.agents.push(new Fox(this, new Vec2(300, 200, this.position)));
+        for(let i = 0; i < this.nCarrots; ++i)
+            this.carrots.push(new Carrot(new Vec2(Math.random() * this.width, Math.random() * this.height, this.position)));
 
         for(let i = 0;  i < this.nFoxes; ++i)
             this.agents.push(new Fox(this, new Vec2(this.width * Math.random(), this.height * Math.random(), this.position)));
 
         for(let i = 0;  i < this.nRabbits; ++i)
             this.agents.push(new Rabbit(this, new Vec2(this.width * Math.random(), this.height * Math.random(), this.position)));
+    }
 
-        // this.plot = new LinePlot(
-        //     new Vec2(2250, 800),
-        //     400,
-        //     400,
-        //     "Population by time",
-        //     "Time",
-        //     "Population",
-        //     [
-        //         {data: [this.T, this.Rabbits], props: {label: "Rabbits", color: "red"}},
-        //         {data: [this.T, this.Foxes], props: {label: "Foxes", color: "blue"}}
-        //     ], 
-        //     {
-        //         roundX: 1,
-        //         roundY: 0,
-        //     }
-        // )
+    Tick() {
+
+        this.ResetInteractions();
+        this.agents.forEach(agent => Agent.Tick(this, agent));
+        this.agents.forEach(agent => agent.SetPosition(this));
+        this.RunInteractions();
+        this.CleanUp();
     }
 
     CanInteract(firstAgent, secondAgent) {
         return !this.interactionTracker[this.InteractionID(firstAgent, secondAgent)];
     }
 
-    EndCondition() {
-        return this.agentCount["Fox"] == 0 || this.agentCount["Rabbit"] == 0;
-        // return this.agentCount["Rabbit"] == 0;
-    }
-
-    Title() {
-
-        let str = "";
-        for(let type in this.agentCount)
-            str += type + ": " + this.agentCount[type] + " "
-        return this.title + ", Iteration: " + this.iteration + ", " + str;
-    }
-
-    Tick() {
-
-        if(Keyboard.KeyDown("w"))
-            this.fox.cooldowns["starvation"] -= .1;
-
-        if(Keyboard.KeyUp("p"))
-            propogationReduction += 1;
-        
-        if(Keyboard.KeyDown("d")) {
-            distanceBias += 0.0001;
-            console.log(distanceBias)
-        }
-        if(Keyboard.KeyDown("a")) {
-            distanceBias -= 0.0001;
-            console.log(distanceBias)
-        }
-        if(Keyboard.KeyUp("e")) {
-            this.agents.push(new Rabbit(this, new Vec2(300, 100, this.position)))
-        }
-
-        this.ResetInteractions();
-        this.agents.forEach(agent => Agent.Tick(this, agent));
-        this.agents.forEach(agent => agent.Set(this));
-        this.BoundaryConditions();        
-        this.RunInteractions();
-        this.Rabbits.push(this.agentCount["Rabbit"])
-        this.Foxes.push(this.agentCount["Fox"])
-        this.T.push(this.t)
-    }
-
     InteractionID(firstAgent, secondAgent) {
         let smallestID = Math.min(firstAgent.ID, secondAgent.ID), largestID = Math.max(firstAgent.ID, secondAgent.ID);
         return smallestID + "," + largestID;
-    }
-
-    BoundaryConditions() {
-        this.agents.forEach(agent => {
-            if(agent.position.x > this.width)
-                agent.position.x -= this.width;
-            else if(agent.position.x < 0)
-                agent.position.x += this.width;
-
-            if(agent.position.y > this.height)
-                agent.position.y -= this.height;
-            else if(agent.position.y < 0)
-                agent.position.y += this.height;
-        });
     }
 
     RunInteractions() {
@@ -482,7 +461,7 @@ class Project extends Simulation {
                     this.agents[i].Interact(this.agents[q], this);
     }
 
-    ResetInteractions() {
+    CleanUp() {
 
         for(let i = 0; i < this.agents.length; ++i)
             if(!this.agents[i].alive) {
@@ -490,17 +469,37 @@ class Project extends Simulation {
                 this.agents.splice(i--, 1);
             }
 
-        
+        for(let i = 0; i < this.carrots.length; ++i) {
+            let carrot = this.carrots[i];
+            if(!carrot.alive) {
+                carrot.position["="](this.width * Math.random(), this.height * Math.random());
+                carrot.alive = true;
+            }
+        }
+
+    }
+
+    ResetInteractions() {
         for(let interaction in this.interactionTracker)
             if(this.interactionTracker[interaction] <= 0)
                 delete this.interactionTracker[interaction];
             else this.interactionTracker[interaction] -= this.dt;
     }
 
-    Draw() {
+    EndCondition() {
+        return false;
+    }
 
-        
+    Title() {
+        let str = "";
+        for(let type in this.agentCount)
+            str += type + ": " + this.agentCount[type] + " ";
+        return this.title + ", Iteration: " + this.iteration + ", " + str;
+    }
+
+    Draw() {
         ClipRectangle(this.position, this.width, this.height);
+        this.carrots.forEach(carrot => carrot.Draw());
         this.agents.forEach(agent => {
             agent.Draw(agent.position);
 
