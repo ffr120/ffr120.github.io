@@ -83,7 +83,7 @@ class Brain {
         })
         let orientation =  Math.atan2(sin, cos) + eta * (-0.5 + Math.random()) * simulation.dt;
 
-        this.AddReward(0.1, orientation);
+        this.AddReward(0.05, orientation);
     }
 
     Evaluate(simulation) {
@@ -93,7 +93,8 @@ class Brain {
         if(this.parent.constructor.name == "Rabbit") {
             this.Vicsek(simulation);
             simulation.carrots.forEach(carrot => {
-                this.Observe(carrot)
+                if (carrot.alive)
+                    this.Observe(carrot)
             })
         }
 
@@ -298,7 +299,7 @@ class Agent {
             return;
 
         object.alive = false;
-        
+        object.respawnCooldown = Carrot.growthDelay;
         this.cooldowns["starvation"] += object.constructor.nutritionValue;
     }
 }
@@ -312,11 +313,11 @@ class Rabbit extends Agent {
 
     static propagationChance = .6;
     static propagationCooldown = 3 * Agent.reproductionFactor / this.propagationChance;
-    static propagationWeight = .3;
+    static propagationWeight = .25;
     static antiClusteringWeight = -.2;
     static starvationCooldown = 60;
     static nutritionValue = 60;
-    static birthCost = 30;
+    static birthCost = 20;
 
     constructor(parent, position) {
         super(parent, position);
@@ -330,7 +331,8 @@ class Rabbit extends Agent {
     }
 
     ObserveCarrot(carrot) {
-        return .2;
+        return this.CooldownScale("starvation");
+        // return .2;
     }
 
     ObserveFox(agent) {
@@ -391,8 +393,10 @@ class Fox extends Agent {
 
 class Carrot {
     
-    static nutritionValue = 10;
+    static nutritionValue = 30;
     static radius = 10;
+    static growthDelay = 10;
+    respawnCooldown = 0;
 
     alive = true;
     constructor(position) {
@@ -400,10 +404,25 @@ class Carrot {
         this.orientation = Math.random() * 2 * Math.PI;
     }
 
+    Tick(simulation) {
+        if (this.respawnCooldown <= 0 && !this.alive) {
+            this.alive = true;
+            this.position["="](simulation.width * Math.random(), simulation.height * Math.random());
+        }
+        else {
+            this.respawnCooldown -= simulation.dt;
+        }
+    }
+
     Draw() {
-        Circle(this.position, Carrot.radius, {fill: "rgb(220, 140, 20, 1)"});
-        Circle(this.position, Carrot.radius * .8, {fill: "rgb(250, 170, 50, 1)"});
-        Circle(this.position, Carrot.radius * .4, {fill: "rgb(130, 220, 70, 1)"});
+        if (this.alive) {
+            Circle(this.position, Carrot.radius, {fill: "rgb(220, 140, 20, 1)"});
+            Circle(this.position, Carrot.radius * .8, {fill: "rgb(250, 170, 50, 1)"});
+            Circle(this.position, Carrot.radius * .4, {fill: "rgb(130, 220, 70, 1)"});
+        }
+        else {
+            Circle(this.position, Carrot.radius, {fill: "black"});
+        }
     }
 }
 
@@ -414,8 +433,10 @@ class Project extends Simulation {
     agents = [];
     dt = 0.01;
 
-    nFoxes = 10;
+    // nFoxes = 10;
+    nFoxes = 0;
     nRabbits = 50;
+    // nRabbits = 1;
     nCarrots = 60;
 
     eatChance = .8;
@@ -441,6 +462,7 @@ class Project extends Simulation {
         this.ResetInteractions();
         this.agents.forEach(agent => Agent.Tick(this, agent));
         this.agents.forEach(agent => agent.SetPosition(this));
+        this.carrots.forEach(carrot => carrot.Tick(this));
         this.RunInteractions();
         this.CleanUp();
     }
@@ -469,13 +491,13 @@ class Project extends Simulation {
                 this.agents.splice(i--, 1);
             }
 
-        for(let i = 0; i < this.carrots.length; ++i) {
-            let carrot = this.carrots[i];
-            if(!carrot.alive) {
-                carrot.position["="](this.width * Math.random(), this.height * Math.random());
-                carrot.alive = true;
-            }
-        }
+        // for(let i = 0; i < this.carrots.length; ++i) {
+        //     let carrot = this.carrots[i];
+        //     if(!carrot.alive) {
+        //         carrot.position["="](this.width * Math.random(), this.height * Math.random());
+        //         carrot.alive = true;
+        //     }
+        // }
 
     }
 
