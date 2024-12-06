@@ -1,7 +1,11 @@
 
 
-let Rf = 100;
-let eta = 1;
+class Vicsek {
+    static influence = 0.05;
+    static noiseWeight = 1;
+    static flockRadius = 100;
+}
+
 class BrainSegment {
     value = 0;
     constructor(orientation, width) {
@@ -12,12 +16,14 @@ class BrainSegment {
 
 class Brain {
     
-    static propogationReduction = 2;
+    static nSegments = 40;
+    static spreadCoefficient  = 2;
     static distanceBias = .1;
+    
     segments = [];
-    constructor(parent, N) {
+    constructor(parent) {
         this.parent = parent;
-        this.N = N;
+        this.N = Brain.nSegments;
         
         for(let i = 0; i < this.N; ++i)
             this.segments.push(new BrainSegment(Math.PI / this.N + i * Math.PI * 2 / this.N, Math.PI/ this.N));
@@ -63,10 +69,10 @@ class Brain {
             if(prevSegment < 0)
                 prevSegment += this.N;
 
-            this.segments[nextSegment].value += reward * Math.exp(-i*Brain.propogationReduction/propogationLength);
+            this.segments[nextSegment].value += reward * Math.exp(-i * Brain.spreadCoefficient  / propogationLength);
 
             if(nextSegment != prevSegment)
-                this.segments[prevSegment].value += reward * Math.exp(-i*Brain.propogationReduction/propogationLength);
+                this.segments[prevSegment].value += reward * Math.exp(-i * Brain.spreadCoefficient  / propogationLength);
         }
     }
 
@@ -75,15 +81,15 @@ class Brain {
 
         simulation.agents.forEach(agent => {
             if(agent.constructor.name == "Rabbit") {
-                if (this.parent.position.periodicDistance(agent.position, simulation.width, simulation.height) < Rf) {
+                if (this.parent.position.periodicDistance(agent.position, simulation.width, simulation.height) < Vicsek.flockRadius) {
                     cos += Math.cos(agent.orientation);
                     sin += Math.sin(agent.orientation);
                 }
             }
         })
-        let orientation =  Math.atan2(sin, cos) + eta * (-0.5 + Math.random()) * simulation.dt;
+        let orientation =  Math.atan2(sin, cos) + Vicsek.noiseWeight * (-0.5 + Math.random()) * simulation.dt;
 
-        this.AddReward(0.05, orientation);
+        this.AddReward(Vicsek.influence, orientation);
     }
 
     Evaluate(simulation) {
@@ -133,11 +139,11 @@ class Brain {
 
 class Agent {
 
-    static reproductionFactor = 5;
+    static reproductionDamper = 60;
     static IDs = 0;
     t_levy = 0;
     alive = true;
-    cooldowns = { propagation: 0 };
+    cooldowns = { reproduction: 0 };
     turnSpeed = 2 * Math.PI;
     orientation = Math.random() * Math.PI * 2;
     targetOrientation = Math.random() * Math.PI * 2;
@@ -148,7 +154,7 @@ class Agent {
         this.parent = parent;
         this.position = position;
         this.ID = Agent.IDs++;
-        this.brain = new Brain(this, 40);
+        this.brain = new Brain(this);
         ++parent.agentCount[this.constructor.name];
     }
 
@@ -226,15 +232,15 @@ class Agent {
         if(!simulation.interactionTracker[interactionID]) {
             if(this.constructor.name == agent.constructor.name) {
 
-                if(this.cooldowns["propagation"] <= 0 && agent.cooldowns["propagation"] <= 0) {
+                if(this.cooldowns["reproduction"] <= 0 && agent.cooldowns["reproduction"] <= 0) {
                     simulation.interactionTracker[interactionID] = simulation.interactionCooldown;
-                    if(Math.random() < this.constructor.propagationChance) {
+                    if(Math.random() < this.constructor.reproductionChance) {
 
 
                         let newAgent = new this.constructor(simulation, this.position["+"](agent.position)["*"](1/2));
-                        newAgent.cooldowns["propagation"] = this.constructor.propagationCooldown;
-                        this.cooldowns["propagation"] = this.constructor.propagationCooldown;
-                        agent.cooldowns["propagation"] = this.constructor.propagationCooldown;
+                        newAgent.cooldowns["reproduction"] = this.constructor.reproductionCooldown;
+                        this.cooldowns["reproduction"] = this.constructor.reproductionCooldown;
+                        agent.cooldowns["reproduction"] = this.constructor.reproductionCooldown;
                         simulation.interactionTracker[simulation.InteractionID(newAgent, this)] = simulation.interactionCooldown;
                         simulation.interactionTracker[simulation.InteractionID(newAgent, agent)] = simulation.interactionCooldown;
                         newAgent.cooldowns["starvation"] = this.constructor.birthCost * 2;
@@ -284,7 +290,7 @@ class Agent {
         let image = this.constructor.image;
         
         Circle(position, radius, {fill: "rgb(0, 0, 250, .2)"});
-        Circle(position, radius, {fill: "rgb(0, 0, 250, .2)", end: Math.PI * 2 * (1 - this.CooldownScale("propagation"))});
+        Circle(position, radius, {fill: "rgb(0, 0, 250, .2)", end: Math.PI * 2 * (1 - this.CooldownScale("reproduction"))});
         Circle(position, radius + 4, {stroke: "rgb(250, 0, 0, .5)", end: Math.PI * 2 * (1 - this.CooldownScale("starvation")), lineWidth: 4});
         Image(position, radius, radius, this.orientation, image)
         this.brain.Draw(position, radius + 8);
@@ -311,8 +317,9 @@ class Rabbit extends Agent {
     static radius = 15;
     static visionRadius = 0;
 
-    static propagationChance = .6;
-    static propagationCooldown = 3 * Agent.reproductionFactor / this.propagationChance;
+    static reproductionChance = .6;
+    static reproductionCooldown = 3 * Agent.reproductionDamper * this.reproductionChance;
+
     static propagationWeight = .25;
     static antiClusteringWeight = -.2;
     static starvationCooldown = 60;
@@ -340,7 +347,7 @@ class Rabbit extends Agent {
     }
 
     ObserveRabbit(agent) {
-        if(!this.parent.CanInteract(this, agent) || this.CooldownScale("propagation") < 1 || agent.CooldownScale("propagation") < 1)
+        if(!this.parent.CanInteract(this, agent) || this.CooldownScale("reproduction") < 1 || agent.CooldownScale("reproduction") < 1)
             return Rabbit.antiClusteringWeight;
         return Rabbit.propagationWeight;
     }
@@ -353,10 +360,10 @@ class Fox extends Agent {
     static radius = 30;
     static visionRadius = 0;
 
-    static propagationChance = .4;
-    static propagationCooldown = Agent.reproductionFactor / this.propagationChance;
+    static reproductionChance = .4;
+    static reproductionCooldown = Agent.reproductionDamper * this.reproductionChance;
     
-    static starvationCooldown = 150;
+    static starvationCooldown = 90;
     static propagationWeight = .3;
     static antiClusteringWeight = -.2;
     static birthCost = 30;
@@ -379,7 +386,7 @@ class Fox extends Agent {
 
     ObserveFox(agent) {
         
-        if(!this.parent.CanInteract(this, agent) || this.CooldownScale("propagation") < 1 || agent.CooldownScale("propagation") < 1)
+        if(!this.parent.CanInteract(this, agent) || this.CooldownScale("reproduction") < 1 || agent.CooldownScale("reproduction") < 1)
             return Fox.antiClusteringWeight;
         return Fox.propagationWeight;
     }
@@ -433,11 +440,9 @@ class Project extends Simulation {
     agents = [];
     dt = 0.01;
 
-    // nFoxes = 10;
-    nFoxes = 0;
+    nFoxes = 3;
     nRabbits = 50;
-    // nRabbits = 1;
-    nCarrots = 60;
+    nCarrots = 150;
 
     eatChance = .8;
     interactionCooldown = 8;
