@@ -143,14 +143,14 @@ class Agent {
     static IDs = 0;
     t_levy = 0;
     alive = true;
-    cooldowns = { reproduction: 0 };
+    cooldowns = { reproductionCooldown: 0};
     turnSpeed = 2 * Math.PI;
     orientation = Math.random() * Math.PI * 2;
     targetOrientation = Math.random() * Math.PI * 2;
 
     constructor(parent, position) {
 
-        this.cooldowns.starvation = this.constructor.starvationCooldown * 0.75;
+        this.cooldowns.lifeTime = this.constructor.lifeTime * 0.75;
         this.parent = parent;
         this.position = position;
         this.ID = Agent.IDs++;
@@ -187,7 +187,7 @@ class Agent {
         agent.Tick(simulation);
         agent.DecreaseCooldowns(simulation.dt);
 
-        if(agent.cooldowns["starvation"] == 0)
+        if(agent.cooldowns["lifeTime"] <= 0)
             agent.alive = false;
     }
 
@@ -232,20 +232,20 @@ class Agent {
         if(!simulation.interactionTracker[interactionID]) {
             if(this.constructor.name == agent.constructor.name) {
 
-                if(this.cooldowns["reproduction"] <= 0 && agent.cooldowns["reproduction"] <= 0) {
+                if(this.cooldowns["reproductionCooldown"] <= 0 && agent.cooldowns["reproductionCooldown"] <= 0) {
                     simulation.interactionTracker[interactionID] = simulation.interactionCooldown;
                     if(Math.random() < this.constructor.reproductionChance) {
 
 
                         let newAgent = new this.constructor(simulation, this.position["+"](agent.position)["*"](1/2));
-                        newAgent.cooldowns["reproduction"] = this.constructor.reproductionCooldown;
-                        this.cooldowns["reproduction"] = this.constructor.reproductionCooldown;
-                        agent.cooldowns["reproduction"] = this.constructor.reproductionCooldown;
+                        newAgent.cooldowns["reproductionCooldown"] = this.constructor.reproductionCooldown;
+                        this.cooldowns["reproductionCooldown"] = this.constructor.reproductionCooldown;
+                        agent.cooldowns["reproductionCooldown"] = this.constructor.reproductionCooldown;
                         simulation.interactionTracker[simulation.InteractionID(newAgent, this)] = simulation.interactionCooldown;
                         simulation.interactionTracker[simulation.InteractionID(newAgent, agent)] = simulation.interactionCooldown;
-                        newAgent.cooldowns["starvation"] = this.constructor.birthCost * 2;
-                        agent.cooldowns["starvation"] -= this.constructor.birthCost;
-                        this.cooldowns["starvation"] -= this.constructor.birthCost;
+                        newAgent.cooldowns["lifeTime"] = this.constructor.birthCost * 2;
+                        agent.cooldowns["lifeTime"] -= this.constructor.birthCost;
+                        this.cooldowns["lifeTime"] -= this.constructor.birthCost;
 
                         simulation.agents.push(newAgent);
                     }
@@ -256,11 +256,11 @@ class Agent {
                 if(Math.random() < simulation.eatChance) {
 
                     if(this.constructor.name == "Rabbit") {
-                        agent.cooldowns["starvation"] += Rabbit.nutritionValue;
+                        agent.cooldowns["lifeTime"] += Rabbit.nutritionValue;
                         this.alive = false;
                     }
                     else {
-                        this.cooldowns["starvation"] += Rabbit.nutritionValue;
+                        this.cooldowns["lifeTime"] += Rabbit.nutritionValue;
                         agent.alive = false;
                     }
                 }
@@ -269,13 +269,15 @@ class Agent {
     }
 
     CooldownScale(cooldown) {
-        return (this.constructor[cooldown + "Cooldown"] - this.cooldowns[cooldown]) / this.constructor[cooldown + "Cooldown"];
+
+        return (this.constructor[cooldown] - this.cooldowns[cooldown]) / this.constructor[cooldown];
     }
 
     DecreaseCooldowns(dt) {
         for(let cooldown in this.cooldowns) {
-            if(this.cooldowns[cooldown] > this.constructor[cooldown + "Cooldown"])
-                this.cooldowns[cooldown] = this.constructor[cooldown + "Cooldown"];
+
+            if(this.cooldowns[cooldown] > this.constructor[cooldown])
+                this.cooldowns[cooldown] = this.constructor[cooldown];
             
             if(this.cooldowns[cooldown] > 0)
                 this.cooldowns[cooldown] -= dt;
@@ -290,8 +292,8 @@ class Agent {
         let image = this.constructor.image;
         
         Circle(position, radius, {fill: "rgb(0, 0, 250, .2)"});
-        Circle(position, radius, {fill: "rgb(0, 0, 250, .2)", end: Math.PI * 2 * (1 - this.CooldownScale("reproduction"))});
-        Circle(position, radius + 4, {stroke: "rgb(250, 0, 0, .5)", end: Math.PI * 2 * (1 - this.CooldownScale("starvation")), lineWidth: 4});
+        Circle(position, radius, {fill: "rgb(0, 0, 250, .2)", end: Math.PI * 2 * (1 - this.CooldownScale("reproductionCooldown"))});
+        Circle(position, radius + 4, {stroke: "rgb(250, 0, 0, .5)", end: Math.PI * 2 * (1 - this.CooldownScale("lifeTime")), lineWidth: 4});
         Image(position, radius, radius, this.orientation, image)
         this.brain.Draw(position, radius + 8);
 
@@ -306,7 +308,7 @@ class Agent {
 
         object.alive = false;
         object.respawnCooldown = Carrot.growthDelay;
-        this.cooldowns["starvation"] += object.constructor.nutritionValue;
+        this.cooldowns["lifeTime"] += object.constructor.nutritionValue;
     }
 }
 
@@ -322,7 +324,7 @@ class Rabbit extends Agent {
 
     static propagationWeight = .25;
     static antiClusteringWeight = -.2;
-    static starvationCooldown = 60;
+    static lifeTime = 60;
     static nutritionValue = 60;
     static birthCost = 20;
 
@@ -338,7 +340,7 @@ class Rabbit extends Agent {
     }
 
     ObserveCarrot(carrot) {
-        return this.CooldownScale("starvation");
+        return this.CooldownScale("lifeTime");
         // return .2;
     }
 
@@ -347,7 +349,7 @@ class Rabbit extends Agent {
     }
 
     ObserveRabbit(agent) {
-        if(!this.parent.CanInteract(this, agent) || this.CooldownScale("reproduction") < 1 || agent.CooldownScale("reproduction") < 1)
+        if(!this.parent.CanInteract(this, agent) || this.CooldownScale("reproductionCooldown") < 1 || agent.CooldownScale("reproductionCooldown") < 1)
             return Rabbit.antiClusteringWeight;
         return Rabbit.propagationWeight;
     }
@@ -363,7 +365,7 @@ class Fox extends Agent {
     static reproductionChance = .4;
     static reproductionCooldown = Agent.reproductionDamper * this.reproductionChance;
     
-    static starvationCooldown = 90;
+    static lifeTime = 90;
     static propagationWeight = .3;
     static antiClusteringWeight = -.2;
     static birthCost = 30;
@@ -386,7 +388,7 @@ class Fox extends Agent {
 
     ObserveFox(agent) {
         
-        if(!this.parent.CanInteract(this, agent) || this.CooldownScale("reproduction") < 1 || agent.CooldownScale("reproduction") < 1)
+        if(!this.parent.CanInteract(this, agent) || this.CooldownScale("reproductionCooldown") < 1 || agent.CooldownScale("reproductionCooldown") < 1)
             return Fox.antiClusteringWeight;
         return Fox.propagationWeight;
     }
@@ -394,7 +396,7 @@ class Fox extends Agent {
     ObserveRabbit(agent) {
         if(!this.parent.CanInteract(this, agent))
             return 0;
-        return this.CooldownScale("starvation");
+        return this.CooldownScale("lifeTime");
     }
 }
 
@@ -655,7 +657,6 @@ function Start() {
     new DynamicVariable(project.position["+"](project.width + 30, 80), project, "dt", 0, 0.2, 0.01);
     new DynamicVariable(project.position["+"](project.width + 30, 140), Rabbit, "visionRadius", 0, 500, 50, "Rabbit Vision Range");
     new DynamicVariable(project.position["+"](project.width + 30, 200), Fox, "visionRadius", 0, 500, 50, "Fox Vision Range");
-    new DynamicVariable(project.position["+"](project.width + 30, 260), Fox, "starvationCooldown", 15, 80, 5, "Fox Vision Range");
 }
 
 function Update() {
