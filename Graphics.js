@@ -24,7 +24,7 @@ class Plot {
 
         this.labelData = [];
         dataPoints.forEach(dataPoint => {
-            if(dataPoint.props.label)
+            if(dataPoint.props?.label)
                 this.labelData.push(dataPoint.props);
         });
 
@@ -50,53 +50,50 @@ class Plot {
         });
     }
 
-    static Draw() {
-        Plot.instances.forEach(instance => {
-            Rectangle(instance.position, instance.width, instance.height, {stroke: "black"})
+    static Draw(instance) {
 
-            Text(new Vec2(instance.width/2, -Plot.SmallMargin, instance.position), Plot.TitleSize, instance.title, {align: "center"})
-            Text(new Vec2(instance.width/2, instance.height + Plot.SmallMargin, instance.position), Plot.TitleSize, instance.xLabel, {align: "center", justify: "down"})
-            Text(new Vec2(-Plot.SmallMargin, instance.height/2, instance.position), Plot.TitleSize, instance.yLabel, {rotate: -Math.PI/2, align: "center"})
+        Rectangle(instance.position, instance.width, instance.height, {stroke: "black"})
 
-            for(let i = 0; i < 7; ++i) {
+        Text(new Vec2(instance.width/2, -Plot.SmallMargin, instance.position), Plot.TitleSize, instance.title, {align: "center"})
+        Text(new Vec2(instance.width/2, instance.height + Plot.SmallMargin, instance.position), Plot.TitleSize, instance.xLabel, {align: "center", justify: "down"})
+        Text(new Vec2(-Plot.SmallMargin, instance.height/2, instance.position), Plot.TitleSize, instance.yLabel, {rotate: -Math.PI/2, align: "center"})
 
-                let x = i * instance.width/6, y = i * instance.height/6;
-    
-                Line(new Vec2(0, y, instance.position), new Vec2(instance.width, y, instance.position), "lightgray");
-                Line(new Vec2(x, 0, instance.position), new Vec2(x, instance.height, instance.position), "lightgrey");
-                Text(new Vec2(-Plot.Margin, y, instance.position), Plot.AxisTextSize, instance.GetY(y), {round: instance.GetDecimalY(), justify: "center", align: "right"});
-                Text(new Vec2(x, instance.height + Plot.Margin, instance.position), Plot.AxisTextSize, instance.GetX(y), {round: instance.GetDecimalX(), justify: "center", align: "right", rotate: -Math.PI/2});
-            }
+        for(let i = 0; i < 7; ++i) {
 
-            if(instance.labelData.length > 0) {
+            let x = i * instance.width/6, y = i * instance.height/6;
 
-                let heights = [];
-                let width = 0;
-                let height = Plot.LabelWindow.padding * 2 + Plot.LabelWindow.textMargin * (instance.labelData.length - 1);
-                instance.labelData.forEach(data => {
-                    
-                    context.font = Plot.AxisTextSize + "px Arial";
-                    let [w, h] = MeasureText(data.label + ": \u2014");
-                    if(w > width)
-                        width = w;
-                    height += h;
-                    heights.push(h);
-                });
+            Line(new Vec2(0, y, instance.position), new Vec2(instance.width, y, instance.position), "lightgray");
+            Line(new Vec2(x, 0, instance.position), new Vec2(x, instance.height, instance.position), "lightgrey");
+            Text(new Vec2(-Plot.Margin, y, instance.position), Plot.AxisTextSize, instance.GetY(y), {round: instance.GetDecimalY(), justify: "center", align: "right"});
+            Text(new Vec2(x, instance.height + Plot.Margin, instance.position), Plot.AxisTextSize, instance.GetX(y), {round: instance.GetDecimalX(), justify: "center", align: "right", rotate: -Math.PI/2});
+        }
+
+        if(instance.labelData.length > 0) {
+
+            let heights = [];
+            let width = 0;
+            let height = Plot.LabelWindow.padding * 2 + Plot.LabelWindow.textMargin * (instance.labelData.length - 1);
+            instance.labelData.forEach(data => {
                 
-                width += Plot.LabelWindow.padding * 2;
-    
-                Rectangle(new Vec2(instance.width - width - Plot.LabelWindow.margin, Plot.LabelWindow.margin, instance.position), width, height, {fill: "white", stroke: "black"});
-                
-                height = -2;
-                instance.labelData.forEach((data, i) => {
-    
-                    Text(new Vec2(instance.width - Plot.LabelWindow.margin - Plot.LabelWindow.padding, Plot.LabelWindow.margin + Plot.LabelWindow.padding + height, instance.position), Plot.AxisTextSize, data.label + ": \u2014", {align: "right", justify: "down", color: data.color});
-                    height += heights[i] + Plot.LabelWindow.textMargin;
-                });
-            }
+                context.font = Plot.AxisTextSize + "px Arial";
+                let [w, h] = MeasureText(data.label + ": \u2014");
+                if(w > width)
+                    width = w;
+                height += h;
+                heights.push(h);
+            });
+            
+            width += Plot.LabelWindow.padding * 2;
 
-            instance.Draw();
-        });
+            Rectangle(new Vec2(instance.width - width - Plot.LabelWindow.margin, Plot.LabelWindow.margin, instance.position), width, height, {fill: "white", stroke: "black"});
+            
+            height = -2;
+            instance.labelData.forEach((data, i) => {
+
+                Text(new Vec2(instance.width - Plot.LabelWindow.margin - Plot.LabelWindow.padding, Plot.LabelWindow.margin + Plot.LabelWindow.padding + height, instance.position), Plot.AxisTextSize, data.label + ": \u2014", {align: "right", justify: "down", color: data.color});
+                height += heights[i] + Plot.LabelWindow.textMargin;
+            });
+        }
     }
 
     Tick() {
@@ -204,8 +201,8 @@ class LinePlot extends Plot {
 
     Draw() {
 
+        Plot.Draw(this);
         this.dataPoints.forEach(dataPoint => {
-            
             let [X, Y, E] = [...dataPoint.data];
 
             if(X.length < 1)
@@ -291,6 +288,14 @@ function Bar(_position, width, height, props) {
 function Circle(_position, radius, props) {
 
     let position = _position.relative();
+
+    if(props.onCamera) {
+        position = props.onCamera.Relative(position);
+        radius = radius * props.onCamera.zoom;
+        if(props.lineWidth)
+            props.lineWidth *= props.onCamera.zoom;
+    }
+
     let begin = props.begin != undefined  ? props.begin : 0;
     if(begin?.constructor?.name == "FunctionCaller")
         begin = begin.Call();
@@ -372,9 +377,16 @@ function Paint(props) {
         Stroke(props.stroke, props.lineWidth);
 }
 
-function Image(_position, width, height, orientation, image) {
+function Photo(_position, width, height, orientation, image, props = {}) {
 
     let position = _position.relative();
+
+    if(props.onCamera) {
+        position = props.onCamera.Relative(position);
+        width = width * props.onCamera.zoom;
+        height = height * props.onCamera.zoom;
+    }
+
     context.save();
     context.translate(position.x, position.y);
     context.rotate(orientation);

@@ -11,6 +11,12 @@ class FunctionCaller {
     }
 }
 
+function LoadImage(source) {
+    const image = new Image();
+    image.src = source;
+    return image;
+}
+
 class Averager {
     
     constructor(X, N, tolerance) {
@@ -222,6 +228,7 @@ function countZerosAfterDecimal(n) {
 }
 
 function max(v) {
+
     let result = v[0];
     for(let i = 1; i < v.length; ++i)
         if(v[i] > result)
@@ -398,6 +405,62 @@ class MassSimulation {
     }
 }
 
+class Camera {
+
+
+    static minZoom = 1;
+    static maxZoom = 10;
+    static zoomSpeed = .1;
+
+    zoom = 1;
+    constructor(parent) {
+        this.parent = parent;
+        this.origin = new Vec2(parent.width/2, parent.height/2);
+        this.position = new Vec2(0, 0);
+    }
+
+    Relative(position) {
+        return this.parent.RelativePosition(this.origin["+"](position["-"](this.origin["-"](this.position))["*"](this.zoom)));
+    }
+
+    Tick() {
+        if(Mouse.KeyDown("right"))
+            this.position["+="](Mouse.move["*"](this.parent.width/(this.zoom * this.parent.windowHeight)));
+
+        if(Mouse.scroll) 
+            this.zoom -= Math.sign(Mouse.scroll) * Camera.zoomSpeed;
+
+        if(this.zoom < Camera.minZoom)
+            this.zoom = Camera.minZoom;
+        else if(this.zoom > Camera.maxZoom)
+            this.zoom = Camera.maxZoom;
+        
+        if(this.origin.x - this.position.x + this.parent.width/(2 * this.zoom) > this.parent.width)
+            this.position.x = -(this.parent.width - this.parent.width/(2 * this.zoom) - this.origin.x)
+
+
+        else if(this.origin.x - this.position.x - this.parent.width/(2 * this.zoom) < 0) {
+            this.position.x = this.origin.x - this.parent.width/(2 * this.zoom);
+        }
+
+        if(this.origin.y - this.position.y + this.parent.height/(2 * this.zoom) > this.parent.width)
+            this.position.y = -(this.parent.width - this.parent.height/(2 * this.zoom) - this.origin.y)
+
+
+        else if(this.origin.y - this.position.y - this.parent.height/(2 * this.zoom) < 0) {
+            this.position.y = this.origin.y - this.parent.height/(2 * this.zoom);
+        }
+    }
+
+    InSpace(position) {
+
+        let p = position["-"](this.parent.position)["*"](this.parent.width/this.parent.windowWidth);
+
+        let diff = p["-"](this.origin)["*"](1/this.zoom);
+        return this.origin["-"](this.position)["+"](diff);
+    }
+}
+
 class Simulation {
 
     static instances = [];
@@ -411,17 +474,28 @@ class Simulation {
     t = 0;
     dt = 1;
 
-    constructor(position, width, height, title, updatesPerTick) {
+    constructor(position, width, height, windowWidth, windowHeight, title, updatesPerTick) {
         this.position = position;
         this.width = width;
         this.height = height;
+        this.windowWidth = windowWidth;
+        this.windowHeight = windowHeight;
+        
+        this.scale = this.windowWidth/this.width;
+
         this.title = title;
         this.updatesPerTick = updatesPerTick;
-
-        // new Rectangle(this, {stroke: "black"})
-        // new Text(this, Simulation.TitleSize, new FunctionCaller(this, this.Title));
+        this.camera = new Camera(this);
 
         Simulation.instances.push(this);
+    }
+
+    RelativePosition(position) {
+        return this.position["+"](position["*"](this.windowWidth/this.width));
+    }
+
+    ToggleDraw() {
+        this.draw = this.draw ? false : true;
     }
 
     static Reset(instance) {
@@ -432,7 +506,12 @@ class Simulation {
 
     static Tick() {
         this.instances.forEach(instance => {
+
+            instance.StaticTick();
             if(!instance.paused) {
+
+                instance.camera.Tick();
+
                 for(let i = 0; i < instance.updatesPerTick && !instance.EndCondition(); ++i) {
                     instance.Tick();
                     ++instance.iteration;
@@ -445,6 +524,10 @@ class Simulation {
                 }
             }
         });
+    }
+
+    StaticTick() {
+
     }
 
     Title() {
@@ -461,9 +544,180 @@ class Simulation {
 
     static Draw() {
         this.instances.forEach(instance => {
-            Rectangle(instance.position, instance.width, instance.height, {stroke: "black"})
+            Rectangle(instance.position, instance.windowWidth, instance.windowHeight, {stroke: "black"})
+            Rectangle(instance.position, 100, 20, {fill: "rgb(0, 0, 0, .4)"})
+            Text(instance.position["+"](50, 10), 10, "Zoom: " + Round(instance.camera.zoom * 100, 0) + "%", {color: "white", align: "center", justify: "center"})
             Text(instance.position, Simulation.TitleSize, instance.Title())
             instance.Draw();
         });
+    }
+}
+
+class Button {
+
+    static image = LoadImage('./drawIcon.png')
+    static instances = [];
+    constructor(position, width, height, func) {
+        this.position = position;
+        this.width = width;
+        this.height = height;
+        this.func = func;
+        this.pressed = false;
+        Button.instances.push(this);
+    }
+
+    Tick() {
+
+        this.hover = InRectangle(this.position, this.width, this.height, Mouse.position);
+
+        if(this.hover && Mouse.KeyUp("left")) {
+            this.func.Call();
+            this.pressed = this.pressed ? false : true;
+        }
+    }
+
+
+    Draw() {
+        
+        if(this.pressed)
+            Rectangle(this.position, this.width, this.height, {fill: "rgb(250, 0, 0, .6)"});
+        else Rectangle(this.position, this.width, this.height, {fill: "rgb(0, 0, 250, .6)"});
+
+        if(this.hover)
+            Rectangle(this.position, this.width, this.height, {fill: "rgb(250, 250, 250, .4)"})
+
+        Photo(this.position["+"](this.width/2, this.height/2), this.width/3, this.height/3, 0, Button.image)
+    }
+}
+
+function InRectangle(_position, width, height, _targetPosition) {
+
+    let position = _position.relative(), targetPosition = _targetPosition.relative();
+
+    return (targetPosition.x > position.x && targetPosition.x < position.x + width
+        && targetPosition.y > position.y && targetPosition.y < position.y + height);
+}
+
+function DownloadJSON(data, fileName = "data") {
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName + '.json';
+    a.click();
+
+    URL.revokeObjectURL(url);
+}
+
+function TakeImages() {
+    
+    imageObjects.forEach(object => {
+
+        let [x, y, width, height, filename] = object.OrderImage();
+
+        x = Math.floor(x);
+        y = Math.floor(y);
+        width = Math.ceil(width);
+        height = Math.ceil(height);
+        filename = filename.replace(/\./g, ",");
+        
+        if (!filename.endsWith('.png')) {
+            filename += '.png';
+        }
+
+        const paintCanvas = document.createElement('canvas');
+        const paintCtx = paintCanvas.getContext('2d');
+        paintCanvas.width = canvas.width;
+        paintCanvas.height = canvas.height;
+        let prevCtx = context;
+        context = paintCtx;
+
+        Rectangle(new Vec2(0, 0), canvas.width, canvas.height, {fill: "white"});
+        object.Draw();
+        
+        context = prevCtx;
+        
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        
+        tempCanvas.width = width;
+        tempCanvas.height = height;
+        
+        let imageData = paintCtx.getImageData(x, y, width, height);
+        tempCtx.putImageData(imageData, 0, 0);
+        
+        const pngData = tempCanvas.toDataURL('image/png');
+        
+        const link = document.createElement('a');
+        link.href = pngData;
+        link.download = filename;
+        link.click();
+    });
+
+    imageObjects.length = 0;
+}
+
+function StoreImage(object) {
+    imageObjects.push(object);
+}
+
+class DynamicVariable {
+
+    static height = 30;
+    static width = 150
+    static instances = [];
+    constructor(position, object, variable, min, max, stepSize, label = variable) {
+
+        this.label = label;
+        this.position = position;
+        this.object = object;
+        this.variable = variable;
+        this.min = min;
+        this.max = max;
+        this.stepSize = stepSize;
+        this.steps = (max - min)/stepSize;
+
+        this.SetValue((object[variable] - min)/(max - min));
+
+        DynamicVariable.instances.push(this);
+    }
+
+    Tick() {
+
+        if(Mouse.KeyDown("left")) {
+
+            this.handlePosition = this.position["+"](DynamicVariable.width * this.scaledValue);
+
+            if(this.handlePosition.distance(Mouse.position) < DynamicVariable.height * .8) {
+                Mouse.Target(this);
+            }
+
+            if(Mouse.target == this) {
+
+                let value = (Mouse.position.x - this.position.x) / DynamicVariable.width;
+                if(value < 0)
+                    value = 0;
+                else if(value > 1)
+                    value = 1;
+
+                this.SetValue(value);
+            }
+        }
+    }
+
+    SetValue(value) {
+        this.scaledValue = Math.floor(this.steps * value + 10e-6) / this.steps;
+        this.value = this.min + Math.floor(this.steps * value + 10e-6) * this.stepSize
+        this.object[this.variable] = this.value;
+    }
+
+    Draw() {
+        Bar(this.position, DynamicVariable.width, DynamicVariable.height, {fill: "rgb(0, 0, 250, .2)"});
+        Bar(this.position, DynamicVariable.width, DynamicVariable.height * .8, {fill: "rgb(0, 0, 250, .2)"});
+        Text(this.position["+"](DynamicVariable.width/2), 15, this.label + ": " + this.object[this.variable], {align: "center", justify: "center", color: "rgb(250, 250, 250, .8)"})
+        Circle(this.position["+"](DynamicVariable.width * this.scaledValue), DynamicVariable.height * .8 / 2, {fill: "rgb(250, 250, 250, .6)"});
+        Circle(this.position["+"](DynamicVariable.width * this.scaledValue), DynamicVariable.height * .6 / 2, {fill: "rgb(250, 250, 250, .6)"});
     }
 }

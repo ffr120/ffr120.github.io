@@ -68,15 +68,19 @@ class Mouse {
     static Convert(key) {
         if(key == "0")
             return "left";
-        else if(key == "1")
+        else if(key == "2")
             return "right";
-        else if(key == "3")
+        else if(key == "1")
             return "scroll";
         else return key;
     }
 }
 
-onmousemove = (event) => {Mouse.position["="]({x: event.clientX, y: event.clientY});}
+document.addEventListener('contextmenu', event => event.preventDefault());
+onmousemove = (event) => {Mouse.position["="]({x: event.clientX + window.scrollX, y: event.clientY + window.scrollY});}
 onmousedown = (event) => {Mouse[Mouse.Convert(event.button)] = 1;}
 onmouseup = (event) => {Mouse[Mouse.Convert(event.button)] = 0;}
-onmousewheel = (event) => {Mouse.scroll = Math.sign(event.deltaY);}
+onmousewheel = (event) => {
+    Mouse.scroll = event.deltaY;
+    Mouse.position["="]({x: event.clientX + window.scrollX, y: event.clientY + window.scrollY});
+}

@@ -1,5 +1,4 @@
 
-
 class Vicsek {
     static influence = 0.05;
     static noiseWeight = 1;
@@ -18,7 +17,7 @@ class Brain {
     
     static nSegments = 40;
     static spreadCoefficient  = 2;
-    static distanceBias = .1;
+    static distanceBias = 0.1;
     
     segments = [];
     constructor(parent) {
@@ -112,6 +111,7 @@ class Brain {
         let maxValue = Math.max(...this.segments.map(segment => segment.value));
         if(maxValue == 0)
             return false;
+        
         let bestOptions = this.segments.filter(segment => segment.value === maxValue);
         this.selected = bestOptions[randi(bestOptions.length)];
         return this.selected.orientation;
@@ -132,7 +132,8 @@ class Brain {
         this.segments.forEach(segment => {
             let color = segment.value < 0 ? RGB(-segment.value * scale, 0, 0, .4) : RGB(0, segment.value * scale, 0, .4);
 
-            Circle(position, radius + 2 + 3, {stroke: color, begin: segment.orientation - segment.width + .01, end: segment.orientation + segment.width - .01, lineWidth: 2 + 6 * (segment.value - min)/del})
+            let w = 8 * this.parent.parent.scale * (segment.value - min)/del;
+            Circle(position, radius + w/2, {stroke: color, begin: segment.orientation - segment.width + .01, end: segment.orientation + segment.width - .01, lineWidth: w, onCamera: this.parent.parent.camera})
         });
     }
 }
@@ -143,14 +144,13 @@ class Agent {
     static IDs = 0;
     t_levy = 0;
     alive = true;
-    cooldowns = { reproductionCooldown: 0};
-    turnSpeed = 2 * Math.PI;
+    cooldowns = { reproductionCooldown: 0, lifeTime: this.constructor.lifeTime * 0.75};
+    turnSpeed = Math.PI/4;
     orientation = Math.random() * Math.PI * 2;
     targetOrientation = Math.random() * Math.PI * 2;
 
     constructor(parent, position) {
 
-        this.cooldowns.lifeTime = this.constructor.lifeTime * 0.75;
         this.parent = parent;
         this.position = position;
         this.ID = Agent.IDs++;
@@ -253,16 +253,11 @@ class Agent {
             }
             else {
                 simulation.interactionTracker[interactionID] = simulation.interactionCooldown;
-                if(Math.random() < simulation.eatChance) {
+                if(Math.random() < Fox.eatChance) {
 
-                    if(this.constructor.name == "Rabbit") {
-                        agent.cooldowns["lifeTime"] += Rabbit.nutritionValue;
-                        this.alive = false;
-                    }
-                    else {
-                        this.cooldowns["lifeTime"] += Rabbit.nutritionValue;
-                        agent.alive = false;
-                    }
+                    if(this.constructor.name == "Rabbit")
+                        agent.Eat(this);
+                    else this.Eat(agent);
                 }
             }
         }
@@ -287,18 +282,18 @@ class Agent {
 
     Draw(position) {
 
-        let radius = this.constructor.radius;
-        let visionRadius = this.constructor.visionRadius;
+        let radius = this.constructor.radius * this.parent.scale
+        let visionRadius = this.constructor.visionRadius * this.parent.scale;
         let image = this.constructor.image;
         
-        Circle(position, radius, {fill: "rgb(0, 0, 250, .2)"});
-        Circle(position, radius, {fill: "rgb(0, 0, 250, .2)", end: Math.PI * 2 * (1 - this.CooldownScale("reproductionCooldown"))});
-        Circle(position, radius + 4, {stroke: "rgb(250, 0, 0, .5)", end: Math.PI * 2 * (1 - this.CooldownScale("lifeTime")), lineWidth: 4});
-        Image(position, radius, radius, this.orientation, image)
-        this.brain.Draw(position, radius + 8);
+        Circle(position, radius, {fill: "rgb(0, 0, 250, .2)", onCamera: this.parent.camera});
+        Circle(position, radius, {fill: "rgb(0, 0, 250, .2)", end: Math.PI * 2 * (1 - this.CooldownScale("reproductionCooldown")), onCamera: this.parent.camera});
+        Circle(position, radius + 5 * this.parent.scale, {stroke: "rgb(250, 0, 0, .5)", end: Math.PI * 2 * (1 - this.CooldownScale("lifeTime")), lineWidth: 6 * this.parent.scale, onCamera: this.parent.camera});
+        Photo(position, radius, radius, this.orientation, image, {onCamera: this.parent.camera})
+        this.brain.Draw(position, radius + 10 * this.parent.scale);
 
         if(visionRadius > 0)
-            Circle(position, radius + visionRadius, {stroke: "rgb(0, 0, 250, .2)"});
+            Circle(position, radius + visionRadius, {stroke: "rgb(0, 0, 250, .2)", onCamera: this.parent.camera});
     }
 
     Eat(object) {
@@ -307,24 +302,27 @@ class Agent {
             return;
 
         object.alive = false;
-        object.respawnCooldown = Carrot.growthDelay;
+        if(object.constructor.name == "Carrot")
+            object.respawnCooldown = Carrot.growthDelay;
         this.cooldowns["lifeTime"] += object.constructor.nutritionValue;
     }
 }
 
 class Rabbit extends Agent {
 
-    static image = document.getElementById("rabbit");
+    static image = LoadImage('./rabbit.png')
     static velocity = 40;
-    static radius = 15;
+    static radius = 40;
     static visionRadius = 0;
 
     static reproductionChance = .6;
     static reproductionCooldown = 3 * Agent.reproductionDamper * this.reproductionChance;
-
-    static propagationWeight = .25;
-    static antiClusteringWeight = -.2;
+    
     static lifeTime = 60;
+
+    static reproductionWeight = .25;
+    static antiClusteringWeight = -.2;
+    
     static nutritionValue = 60;
     static birthCost = 20;
 
@@ -351,24 +349,26 @@ class Rabbit extends Agent {
     ObserveRabbit(agent) {
         if(!this.parent.CanInteract(this, agent) || this.CooldownScale("reproductionCooldown") < 1 || agent.CooldownScale("reproductionCooldown") < 1)
             return Rabbit.antiClusteringWeight;
-        return Rabbit.propagationWeight;
+        return Rabbit.reproductionWeight;
     }
 }
 
 class Fox extends Agent {
 
-    static image = document.getElementById("fox");
+    static image = LoadImage('./fox.png')
     static velocity = 50;
-    static radius = 30;
+    static radius = 90;
     static visionRadius = 0;
 
     static reproductionChance = .4;
     static reproductionCooldown = Agent.reproductionDamper * this.reproductionChance;
-    
     static lifeTime = 90;
-    static propagationWeight = .3;
+
+    static reproductionWeight = .3;
     static antiClusteringWeight = -.2;
     static birthCost = 30;
+
+    static eatChance = .8;
 
     constructor(parent, position) {
         super(parent, position);
@@ -378,19 +378,11 @@ class Fox extends Agent {
 
     }
 
-    InteractFox(agent) {
-
-    }
-
-    InteractRabbit(agent) {
-
-    }
-
     ObserveFox(agent) {
         
         if(!this.parent.CanInteract(this, agent) || this.CooldownScale("reproductionCooldown") < 1 || agent.CooldownScale("reproductionCooldown") < 1)
             return Fox.antiClusteringWeight;
-        return Fox.propagationWeight;
+        return Fox.reproductionWeight;
     }
 
     ObserveRabbit(agent) {
@@ -403,12 +395,13 @@ class Fox extends Agent {
 class Carrot {
     
     static nutritionValue = 30;
-    static radius = 10;
+    static radius = 8;
     static growthDelay = 10;
     respawnCooldown = 0;
 
     alive = true;
-    constructor(position) {
+    constructor(parent, position) {
+        this.parent = parent;
         this.position = position;
         this.orientation = Math.random() * 2 * Math.PI;
     }
@@ -425,12 +418,11 @@ class Carrot {
 
     Draw() {
         if (this.alive) {
-            Circle(this.position, Carrot.radius, {fill: "rgb(220, 140, 20, 1)"});
-            Circle(this.position, Carrot.radius * .8, {fill: "rgb(250, 170, 50, 1)"});
-            Circle(this.position, Carrot.radius * .4, {fill: "rgb(130, 220, 70, 1)"});
-        }
-        else {
-            Circle(this.position, Carrot.radius, {fill: "black"});
+
+            let radius = this.constructor.radius * this.parent.scale;
+            Circle(this.position, radius, {fill: "rgb(220, 140, 20, 1)", onCamera: this.parent.camera});
+            Circle(this.position, radius * .8, {fill: "rgb(250, 170, 50, 1)", onCamera: this.parent.camera});
+            Circle(this.position, radius * .4, {fill: "rgb(130, 220, 70, 1)", onCamera: this.parent.camera});
         }
     }
 }
@@ -446,22 +438,60 @@ class Project extends Simulation {
     nRabbits = 50;
     nCarrots = 150;
 
-    eatChance = .8;
     interactionCooldown = 8;
     carrots = [];
 
+    foxCount = [];
+    rabbitCount = [];
+    T = [];
 
-    constructor(position, width, height, updatesPerTick) {
-        super(position, width, height, "Inbreeding Simulator", updatesPerTick)
+
+    constructor(position, width, height, windowWidth, windowHeight, updatesPerTick) {
+        super(position, width, height, windowWidth, windowHeight, "Inbreeding Simulator", updatesPerTick);
 
         for(let i = 0; i < this.nCarrots; ++i)
-            this.carrots.push(new Carrot(new Vec2(Math.random() * this.width, Math.random() * this.height, this.position)));
+            this.carrots.push(new Carrot(this, new Vec2(Math.random() * this.width, Math.random() * this.height)));
 
         for(let i = 0;  i < this.nFoxes; ++i)
-            this.agents.push(new Fox(this, new Vec2(this.width * Math.random(), this.height * Math.random(), this.position)));
+            this.agents.push(new Fox(this, new Vec2(this.width * Math.random(), this.height * Math.random())));
 
         for(let i = 0;  i < this.nRabbits; ++i)
-            this.agents.push(new Rabbit(this, new Vec2(this.width * Math.random(), this.height * Math.random(), this.position)));
+            this.agents.push(new Rabbit(this, new Vec2(this.width * Math.random(), this.height * Math.random())));
+        
+        this.plot = new LinePlot(
+            this.position["+"](this.width + 200, 600),
+            400,
+            400,
+            "Population vs Time",
+            "Time",
+            "Population",
+            [
+                {
+                    data: [this.T, this.foxCount],
+                    props: {
+                        label: "Foxes",
+                        color: "orange"
+                    }
+                },
+                {
+                    data:[this.T, this.rabbitCount],
+                    props: {
+                        label: "Rabbits",
+                        color: "green",
+                    }
+                },
+            ],
+            {
+                alignY: [0, 100]
+            }
+        )
+
+        new Button(this.position["+"](0, this.windowHeight), 50, 50, new FunctionCaller(this, this.ToggleDraw));
+    
+        new DynamicVariable(this.position["+"](this.windowWidth + 30, 20), this, "updatesPerTick", 0, 10, 1);
+        new DynamicVariable(this.position["+"](this.windowWidth + 30, 60), this, "dt", 0, 0.2, 0.01);
+        new DynamicVariable(this.position["+"](this.windowWidth + 30, 100), Rabbit, "visionRadius", 0, 500, 50, "Rabbit Vision Range");
+        new DynamicVariable(this.position["+"](this.windowWidth + 30, 140), Fox, "visionRadius", 0, 500, 50, "Fox Vision Range");
     }
 
     Tick() {
@@ -472,6 +502,9 @@ class Project extends Simulation {
         this.carrots.forEach(carrot => carrot.Tick(this));
         this.RunInteractions();
         this.CleanUp();
+        this.T.push(this.t)
+        this.foxCount.push(this.agentCount.Fox)
+        this.rabbitCount.push(this.agentCount.Rabbit)
     }
 
     CanInteract(firstAgent, secondAgent) {
@@ -485,9 +518,11 @@ class Project extends Simulation {
 
     RunInteractions() {
         for(let i = 0; i < this.agents.length - 1; ++i)
-            for(let q = i + 1; q < this.agents.length; ++q)
+            for(let q = i + 1; q < this.agents.length; ++q) {
+
                 if(this.agents[i].position.periodicDistance(this.agents[q].position) <= this.agents[i].constructor.radius + this.agents[q].constructor.radius)
                     this.agents[i].Interact(this.agents[q], this);
+            }
     }
 
     CleanUp() {
@@ -519,6 +554,19 @@ class Project extends Simulation {
         return false;
     }
 
+    End() {
+        DownloadJSON(
+            {
+                T: this.T,
+                foxCount: this.foxCount,
+                rabbitCount: this.rabbitCount,
+            },
+            "countData"
+        )
+
+        StoreImage(this.plot)
+    }
+
     Title() {
         let str = "";
         for(let type in this.agentCount)
@@ -527,7 +575,11 @@ class Project extends Simulation {
     }
 
     Draw() {
-        ClipRectangle(this.position, this.width, this.height);
+
+        if(!this.draw)
+            return; 
+        
+        ClipRectangle(this.position, this.windowWidth, this.windowHeight);
         this.carrots.forEach(carrot => carrot.Draw());
         this.agents.forEach(agent => {
             agent.Draw(agent.position);
@@ -559,113 +611,47 @@ class Project extends Simulation {
 
         context.restore();
     }
-}
 
-class DynamicVariable {
-
-    static height = 50;
-    static width = 400
-    static instances = [];
-    constructor(position, object, variable, min, max, stepSize, label = variable) {
-
-        this.label = label;
-        this.position = position;
-        this.object = object;
-        this.variable = variable;
-        this.min = min;
-        this.max = max;
-        this.stepSize = stepSize;
-        this.steps = (max - min)/stepSize;
-
-        this.SetValue((object[variable] - min)/(max - min));
-
-        DynamicVariable.instances.push(this);
-
+    StaticTick() {
+        this.GrabFunction();
     }
 
-    Tick() {
+    GrabFunction() {
 
-        if(Mouse.KeyDown("left")) {
+        let position = this.camera.InSpace(Mouse.position);
 
-            this.handlePosition = this.position["+"](DynamicVariable.width * this.scaledValue);
-
-            if(this.handlePosition.distance(Mouse.position) < DynamicVariable.height * .8) {
-                Mouse.Target(this);
-            }
-
-            if(Mouse.target == this) {
-
-                let value = (Mouse.position.x - this.position.x)/DynamicVariable.width;
-                if(value < 0)
-                    value = 0;
-                else if(value > 1)
-                    value = 1;
-
-                this.SetValue(value);
-            }
-        }
-    }
-
-    SetValue(value) {
-        this.scaledValue = Math.floor(this.steps * value) / this.steps;
-        this.value = this.min + Math.floor(this.steps * value) * this.stepSize
-        this.object[this.variable] = this.value;
-    }
-
-    Draw() {
-        Bar(this.position, DynamicVariable.width, DynamicVariable.height, {fill: "rgb(0, 0, 250, .2)"});
-        Bar(this.position, DynamicVariable.width, DynamicVariable.height * .8, {fill: "rgb(0, 0, 250, .2)"});
-        Text(this.position["+"](DynamicVariable.width/2), 30, this.label + ": " + this.object[this.variable], {align: "center", justify: "center", color: "rgb(250, 250, 250, .8)"})
-        Circle(this.position["+"](DynamicVariable.width * this.scaledValue), DynamicVariable.height * .8 / 2, {fill: "rgb(250, 250, 250, .6)"});
-        Circle(this.position["+"](DynamicVariable.width * this.scaledValue), DynamicVariable.height * .6 / 2, {fill: "rgb(250, 250, 250, .6)"});
-    }
-}
-
-function GrabFunction() {
-    project.agents.forEach(agent => {
-        
-        if(Mouse.KeyDown("left") && Mouse.position["+"](-project.position.x, - project.position.y).periodicDistance(agent.position, project.width, project.height) < agent.constructor.radius)
+        this.agents.forEach(agent => {
+            
+            if(Mouse.KeyDown("left") && InRectangle(this.position, this.windowWidth, this.windowHeight, Mouse.position) && position.periodicDistance(agent.position, this.width, this.height) < agent.constructor.radius)
                 Mouse.Target(agent);
-        
-        if(Mouse.target == agent) {
+            
+            if(position.x > this.width)
+                position.x = this.width;
+            else if(position.x < 0)
+                position.x = 0;
 
+            if(position.y > this.height)
+                position.y = this.height;
+            else if(position.y < 0)
+                position.y = 0;
 
-            let x = Mouse.position.x - project.position.x
-                y = Mouse.position.y - project.position.y;
-
-            if(x < 0)
-                x = 0;
-            else if(x > project.width)
-                x = project.width;
-
-            if(y < 0)
-                y = 0;
-            else if(y > project.height)
-                y = project.height;
-
-            agent.position["="](x, y)
-        }
-
-    });
+            if(Mouse.target == agent)
+                agent.position["="](position);
+        });
+    }
 }
 
-let project;
 function Start() {
-    project = new Project(new Vec2(100, 100), 2000, 2000, 1)
-    
-    new DynamicVariable(project.position["+"](project.width + 30, 20), project, "updatesPerTick", 0, 10, 1);
-    new DynamicVariable(project.position["+"](project.width + 30, 80), project, "dt", 0, 0.2, 0.01);
-    new DynamicVariable(project.position["+"](project.width + 30, 140), Rabbit, "visionRadius", 0, 500, 50, "Rabbit Vision Range");
-    new DynamicVariable(project.position["+"](project.width + 30, 200), Fox, "visionRadius", 0, 500, 50, "Fox Vision Range");
+    new Project(new Vec2(100, 100), 3000, 3000, 500, 500, 1)
 }
 
 function Update() {
+    
     DynamicVariable.instances.forEach(instance => instance.Tick());
     Simulation.Tick();
     Plot.Tick();
-    GrabFunction();
 
     DynamicVariable.instances.forEach(instance => instance.Draw());
     Simulation.Draw();
-    Plot.Draw();
+    Plot.instances.forEach(instance => instance.Draw(instance));
 }
