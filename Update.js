@@ -133,7 +133,7 @@ class Brain {
         this.segments.forEach(segment => {
             let color = segment.value < 0 ? RGB(-segment.value * scale, 0, 0, .4) : RGB(0, segment.value * scale, 0, .4);
 
-            let w = 1 + 12 * (segment.value - min) * this.parent.parent.scale * 10;
+            let w = 10e-6 + 12 * (segment.value - min)/del;
 
             Circle(position, radius + w/2, {stroke: color, begin: segment.orientation - segment.width + .01, end: segment.orientation + segment.width - .01, lineWidth: w, onCamera: this.parent.parent.camera})
         });
@@ -444,9 +444,9 @@ class Project extends Simulation {
     agents = [];
     dt = 0;
 
-    nFoxes = 5;
-    nRabbits = 100;
-    nCarrots = 150;
+    nFoxes = 0;
+    nRabbits = 2;
+    nCarrots = 0;
 
     interactionCooldown = 8;
     carrots = [];
@@ -470,7 +470,6 @@ class Project extends Simulation {
         for(let i = 0; i < this.nFoxes; ++i)
             this.agents.push(new Fox(this, new Vec2(Math.random() * this.width, Math.random() * this.height)));
 
-        
         this.plot = new LinePlot(
             this.position["+"](100, this.windowHeight + 100),
             400,
@@ -694,6 +693,12 @@ class Project extends Simulation {
 
                 if(Keyboard.KeyDown("Alt"))
                     agent.cooldowns.lifeTime -= Mouse.move.y;
+                else if(Keyboard.KeyDown("Shift")) {
+                    let distance = agent.position.distance(position);
+
+                    if(distance > 0)
+                        agent.orientation = position.angle(agent.position, distance)
+                }
                 else agent.position["="](position);
             }
         });
@@ -701,7 +706,7 @@ class Project extends Simulation {
 }
 
 function Start() {
-    new Project(new Vec2(50, 50), 2000, 2000, 500, 500, 1)
+    new Project(new Vec2(50, 50), 500, 500, 1000, 1000, 1)
 }
 
 function Update() {
