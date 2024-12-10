@@ -428,7 +428,7 @@ class Camera {
             this.position["+="](Mouse.move["*"](this.parent.width/(this.zoom * this.parent.windowHeight)));
 
         if(Mouse.scroll) 
-            this.zoom -= Math.sign(Mouse.scroll) * Camera.zoomSpeed;
+            this.zoom *=  Math.pow(0.8, Math.sign(Mouse.scroll));
 
         if(this.zoom < Camera.minZoom)
             this.zoom = Camera.minZoom;
@@ -459,6 +459,25 @@ class Camera {
         let diff = p["-"](this.origin)["*"](1/this.zoom);
         return this.origin["-"](this.position)["+"](diff);
     }
+
+    Draw() {
+        if(this.zoom > 1) {
+            
+            let barLength = this.parent.windowWidth - 40;
+            let l = barLength / (2 * this.zoom);
+            let x = barLength * (0.5 - this.position.x / this.parent.width);
+            let y = barLength * (0.5 - this.position.y / this.parent.height);
+            
+            Bar(this.parent.position["+"](10, this.parent.windowHeight - 10), barLength, 10, {fill: "rgb(0, 0, 0, .4)"})
+            Bar(this.parent.position["+"](10 + x - l, this.parent.windowHeight - 10), l * 2, 10, {fill: "rgb(0, 0, 0, .4)"})
+
+            Bar(this.parent.position["+"](this.parent.windowWidth - 10, 10), 10, barLength, {fill: "rgb(0, 0, 0, .4)"})
+            Bar(this.parent.position["+"](this.parent.windowWidth - 10, 10 + y - l), 10, l * 2, {fill: "rgb(0, 0, 0, .4)"})
+        }
+
+        Rectangle(this.parent.position, 100, 20, {fill: "rgb(0, 0, 0, .4)"})
+        Text(this.parent.position["+"](50, 10), 10, "Zoom: " + Round(this.zoom * 100, 0) + "%", {color: "white", align: "center", justify: "center"})
+    }
 }
 
 class Simulation {
@@ -486,6 +505,7 @@ class Simulation {
         this.title = title;
         this.updatesPerTick = updatesPerTick;
         this.camera = new Camera(this);
+        new Button(this.position["+"](100, 0), 20, 20, new FunctionCaller(this, this.ToggleDraw));
 
         Simulation.instances.push(this);
     }
@@ -511,11 +531,13 @@ class Simulation {
             if(!instance.paused) {
 
                 instance.camera.Tick();
-
+                
                 for(let i = 0; i < instance.updatesPerTick && !instance.EndCondition(); ++i) {
                     instance.Tick();
-                    ++instance.iteration;
-                    instance.t = instance.iteration * instance.dt;
+                    if(instance.dt > 0) {
+                        ++instance.iteration;
+                        instance.t += instance.dt;
+                    }
                 }
 
                 if(instance.EndCondition() && instance.running) {
@@ -545,10 +567,9 @@ class Simulation {
     static Draw() {
         this.instances.forEach(instance => {
             Rectangle(instance.position, instance.windowWidth, instance.windowHeight, {stroke: "black"})
-            Rectangle(instance.position, 100, 20, {fill: "rgb(0, 0, 0, .4)"})
-            Text(instance.position["+"](50, 10), 10, "Zoom: " + Round(instance.camera.zoom * 100, 0) + "%", {color: "white", align: "center", justify: "center"})
-            Text(instance.position, Simulation.TitleSize, instance.Title())
+            Text(instance.position["+"](0, -10), Simulation.TitleSize, instance.Title())
             instance.Draw();
+            instance.camera.Draw();
         });
     }
 }
@@ -580,8 +601,8 @@ class Button {
     Draw() {
         
         if(this.pressed)
-            Rectangle(this.position, this.width, this.height, {fill: "rgb(250, 0, 0, .6)"});
-        else Rectangle(this.position, this.width, this.height, {fill: "rgb(0, 0, 250, .6)"});
+            Rectangle(this.position, this.width, this.height, {fill: "rgb(250, 0, 0, .4)"});
+        else Rectangle(this.position, this.width, this.height, {fill: "rgb(0, 0, 250, .4)"});
 
         if(this.hover)
             Rectangle(this.position, this.width, this.height, {fill: "rgb(250, 250, 250, .4)"})
@@ -591,7 +612,6 @@ class Button {
 }
 
 function InRectangle(_position, width, height, _targetPosition) {
-
     let position = _position.relative(), targetPosition = _targetPosition.relative();
 
     return (targetPosition.x > position.x && targetPosition.x < position.x + width

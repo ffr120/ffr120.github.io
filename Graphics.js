@@ -167,7 +167,7 @@ class Plot {
     OrderImage() {
 
         let photoMargin = 20;
-
+        
         let leftMargin = 0, bottomMargin = 0, topMargin = 0, rightMargin = photoMargin;
 
         context.font = Plot.AxisTextSize + "px Arial";
@@ -279,10 +279,18 @@ function Bar(_position, width, height, props) {
 
     let position = _position.relative();
 
-    BeginPath();
-    Arc(position, height / 2, Math.PI / 2, 3 * Math.PI / 2);
-    Arc(position["+"](width), height / 2, 3 * Math.PI / 2, Math.PI / 2);
-    Paint(props);
+    if(width > height) {
+        BeginPath();
+        Arc(position, height / 2, Math.PI / 2, 3 * Math.PI / 2);
+        Arc(position["+"](width), height / 2, 3 * Math.PI / 2, Math.PI / 2);
+        Paint(props);
+    }
+    else {
+        BeginPath();
+        Arc(position, width / 2, Math.PI, 0);
+        Arc(position["+"](0, height), width/2, 0, Math.PI);
+        Paint(props);
+    }
 }
 
 function Circle(_position, radius, props) {
