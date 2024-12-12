@@ -20,7 +20,6 @@ class Brain {
     
     static nSegments = 40;
     static spreadCoefficient  = 1;
-    static distanceBias = 0.005;
     
     segments = [];
     constructor(parent) {
@@ -47,7 +46,7 @@ class Brain {
             return;
 
 
-        let reward = (1 - Vicsek.influence) * this.parent["Observe" + agent.constructor.name](agent) / (1 + Brain.distanceBias * distance);
+        let reward = (1 - Vicsek.influence) * this.parent["Observe" + agent.constructor.name](agent) / (1 + this.parent.constructor.distanceBias * distance);
         if(reward == 0)
             return;
         
@@ -329,6 +328,7 @@ class Rabbit extends Agent {
     static velocity = 110;
     static radius = 20;
     static visionRadius = 0;
+    static distanceBias = 0.005;
 
     static reproductionChance = .6;
     static reproductionCooldown = Agent.reproductionDamper * this.reproductionChance/3;
@@ -374,6 +374,7 @@ class Fox extends Agent {
     static velocity = 140;
     static radius = 45;
     static visionRadius = 0;
+    static distanceBias = 0.02;
 
     static reproductionChance = .4;
     static reproductionCooldown = Agent.reproductionDamper * this.reproductionChance;
@@ -452,7 +453,7 @@ class Project extends Simulation {
     agentCount = {Fox: 0, Rabbit: 0};
     deathCause = {starvation: 0, eaten: 0};
     agents = [];
-    dt = 0.1;
+    dt = 0.5;
 
     nFoxes = 5;
     nRabbits = 100;
@@ -640,8 +641,8 @@ class Project extends Simulation {
     }
 
     EndCondition() {
-        return this.iteration == this.totalIterations;
-        // return this.agentCount.Fox == 0 || this.agentCount.Rabbit == 0;
+        //return this.iteration == this.totalIterations;
+        return this.agentCount.Fox == 0 || this.agentCount.Rabbit == 0;
     }
 
     End() {
@@ -741,95 +742,11 @@ class Project extends Simulation {
     }
 }
 
-class ProjectMassSimulation extends MassSimulation {
 
-    data = {};
-    foxCountList = {};
-    tList = {};
-    rabbitCountList = {};
-    constructor(simulations, runs, repeats) {
-        super(simulations, runs * repeats);
-        this.repeats = repeats;
-    }
-
-    BetweenRuns() {
-
-        Vicsek.borderline = Math.floor((this.run - 1)/this.repeats) * .1;
-        let influence = Round(Vicsek.borderline, 1)
-        if(!this.data[influence])
-            this.data[influence] = 0;
-
-        this.data[influence] += this.simulations[this.current].t;
-
-        // Update time list
-        if (!this.tList[influence]) {
-            this.tList[influence] = [];
-        }
-        this.tList[influence].push(copy(this.simulations[this.current].T));
-
-        // Update fox count list
-        if (!this.foxCountList[influence]) {
-            this.foxCountList[influence] = [];
-        }
-        this.foxCountList[influence].push(copy(this.simulations[this.current].foxCount));
-
-        // Update fox count list
-        if (!this.rabbitCountList[influence]) {
-            this.rabbitCountList[influence] = [];
-        }
-        this.rabbitCountList[influence].push(copy(this.simulations[this.current].rabbitCount));
-    }
-
-    BetweenSimulations() {
-
-    }
-
-    End() {
-
-        console.log("Downloading json");
-        DownloadJSON(
-            {
-                T: this.tList,
-                foxCount: this.foxCountList,
-                rabbitCount: this.rabbitCountList,
-            },
-            "countData"
-        )
-
-        console.log(this.data)
-
-        let V = [];
-        let T = [];
-        for(let prop in this.data) {
-            V.push(prop);
-            T.push(this.data[prop]/this.repeats);
-        }
-
-        StoreImage(new LinePlot(
-            new Vec2(500, 500),
-            400,
-            400,
-            "Simulation Time vs Vicsek Influence",
-            "Vicsek Influence",
-            "Time",
-            [
-                {
-                    data: [V, T],
-                    props: {
-                        color: "orange"
-                    }
-                },
-            ],
-            {
-                roundX: 2
-            }
-        ));
-    }
-}
 
 function Start() {
     let simulations = [new Project(new Vec2(50, 50), 4000, 4000, 500, 500, 1)];
-    new ProjectMassSimulation(simulations, 10, 3);
+    new ProjectMassSimulation(simulations, 3, 3);
 }
 
 function Update() {
