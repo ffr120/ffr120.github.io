@@ -1,12 +1,15 @@
 
 class Vicsek {
-    static influence = 0; //0.05;
-    static noiseWeight = Math.PI/6;
+    static weight = 0.05;
+    static noise = Math.PI / 6;
     static flockRadius = 200;
+    static influence = 0.5;
 }
 
 class BrainSegment {
+
     value = 0;
+
     constructor(orientation, width) {
         this.orientation = orientation;
         this.width = width;
@@ -17,7 +20,7 @@ class Brain {
     
     static nSegments = 40;
     static spreadCoefficient  = 1;
-    static distanceBias = 0.1;
+    static distanceBias = 0.005;
     
     segments = [];
     constructor(parent) {
@@ -70,10 +73,10 @@ class Brain {
             if(prevSegment < 0)
                 prevSegment += this.N;
             
-            this.segments[nextSegment].value += reward * Math.exp(-i / (propogationLength * Brain.spreadCoefficient));
+            this.segments[nextSegment].value += reward * Math.exp(-i * Brain.spreadCoefficient / propogationLength);
 
             if(nextSegment != prevSegment)
-                this.segments[prevSegment].value += reward * Math.exp(-i / (propogationLength * Brain.spreadCoefficient));
+                this.segments[prevSegment].value += reward * Math.exp(-i * Brain.spreadCoefficient / propogationLength);
         }
     }
 
@@ -88,9 +91,9 @@ class Brain {
                 }
             }
         })
-        let orientation =  Math.atan2(sin, cos) + Vicsek.noiseWeight * (-0.5 + Math.random()) * simulation.dt;
+        let orientation =  Math.atan2(sin, cos) + Vicsek.noise * (-0.5 + Math.random()) * simulation.dt;
 
-        this.AddReward(Vicsek.influence, orientation);
+        this.AddReward(Vicsek.influence * Vicsek.weight, orientation);
     }
 
     Evaluate(simulation) {
@@ -332,7 +335,7 @@ class Rabbit extends Agent {
     
     static lifeTime = 60;
 
-    static reproductionWeight = .25;
+    static reproductionWeight = .05;
     static antiClusteringWeight = -.2;
     
     static nutritionValue = 60;
@@ -448,7 +451,7 @@ class Project extends Simulation {
     agentCount = {Fox: 0, Rabbit: 0};
     deathCause = {starvation: 0, eaten: 0};
     agents = [];
-    dt = .1;
+    dt = 0.1;
 
     nFoxes = 5;
     nRabbits = 100;
@@ -542,12 +545,15 @@ class Project extends Simulation {
         // )
     
         new DynamicVariable(this.position["+"](this.windowWidth + 30, 20), this, "updatesPerTick", 0, 10, 1);
-        new DynamicVariable(this.position["+"](this.windowWidth + 30, 60), this, "dt", 0, 0.5, 0.1);
+        new DynamicVariable(this.position["+"](this.windowWidth + 30, 60), this, "dt", 0, 1, 0.01);
         new DynamicVariable(this.position["+"](this.windowWidth + 30, 100), Rabbit, "visionRadius", 0, 500, 50, "Rabbit Vision Range");
         new DynamicVariable(this.position["+"](this.windowWidth + 30, 140), Fox, "visionRadius", 0, 500, 50, "Fox Vision Range");
-        new DynamicVariable(this.position["+"](this.windowWidth + 30, 180), Brain, "distanceBias", 0, 1, 0.01, "Distance Bias");
-        new DynamicVariable(this.position["+"](this.windowWidth + 30, 220), Brain, "spreadCoefficient", 0.01, 1, 0.01, "Spread Coefficient");
+        new DynamicVariable(this.position["+"](this.windowWidth + 30, 180), Brain, "distanceBias", 0, 0.1, 0.001, "Distance Bias");
+        new DynamicVariable(this.position["+"](this.windowWidth + 30, 220), Brain, "spreadCoefficient", 0, 10, 0.5, "Spread Coefficient");
+        new DynamicVariable(this.position["+"](this.windowWidth + 30, 260), Vicsek, "influence", 0.1, 1, 0.1, "Vicsek Influence");
+        new DynamicVariable(this.position["+"](this.windowWidth + 30, 300), Vicsek, "weight", 0, 0.5, 0.01, "Vicsek Weight");
 
+        new DynamicVariable(this.position["+"](this.windowWidth + 30, 340), Fox, "reproductionWeight", 0, 0.5, 0.01, "Reproduction Weight");
     }
 
     Reset() {
@@ -579,11 +585,6 @@ class Project extends Simulation {
     }
     
     Tick() {
-
-        if(Keyboard.KeyUp("1"))
-            Simulation.Reset(this);
-        
-
         this.ResetInteractions();
         this.agents.forEach(agent => Agent.Tick(this, agent));
         this.agents.forEach(agent => agent.SetPosition(this));
@@ -598,6 +599,7 @@ class Project extends Simulation {
         let total = this.deathCause.starvation + this.deathCause.eaten;
         if(total == 0)
             total = 1;
+
         this.starvation.push(this.deathCause.starvation);
         this.eaten.push(this.deathCause.eaten);
     }
@@ -627,15 +629,6 @@ class Project extends Simulation {
                 --this.agentCount[this.agents[i].constructor.name];
                 this.agents.splice(i--, 1);
             }
-
-        // for(let i = 0; i < this.carrots.length; ++i) {
-        //     let carrot = this.carrots[i];
-        //     if(!carrot.alive) {
-        //         carrot.position["="](this.width * Math.random(), this.height * Math.random());
-        //         carrot.alive = true;
-        //     }
-        // }
-
     }
 
     ResetInteractions() {
@@ -748,7 +741,7 @@ class Project extends Simulation {
 
 class ProjectMassSimulation extends MassSimulation {
 
-    data = [];
+    data = {};
     constructor(simulations, runs, repeats) {
         super(simulations, runs * repeats);
         this.repeats = repeats;
@@ -756,8 +749,8 @@ class ProjectMassSimulation extends MassSimulation {
 
     BetweenRuns() {
 
-        Vicsek.influence = Math.floor((this.run - 1)/this.repeats) * .1;
-        let influence = Round(Vicsek.influence, 1)
+        Vicsek.borderline = Math.floor((this.run - 1)/this.repeats) * .1;
+        let influence = Round(Vicsek.borderline, 1)
         if(!this.data[influence])
             this.data[influence] = 0;
 
@@ -795,15 +788,15 @@ class ProjectMassSimulation extends MassSimulation {
                 },
             ],
             {
-                roundX: 1
+                roundX: 2
             }
         ));
     }
 }
 
 function Start() {
-    new Project(new Vec2(50, 50), 4000, 4000, 500, 500, 1);
-    //new ProjectMassSimulation(simulations, 4, 2);
+    let simulations = [new Project(new Vec2(50, 50), 4000, 4000, 500, 500, 1)];
+    new ProjectMassSimulation(simulations, 10, 3);
 }
 
 function Update() {

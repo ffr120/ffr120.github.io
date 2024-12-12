@@ -404,6 +404,8 @@ class MassSimulation {
                 Simulation.Reset(this.simulations[this.current]);
             }
             else {
+                
+                this.BetweenRuns();
                 this.BetweenSimulations();
                 this.run = 0;
                 ++this.current;
