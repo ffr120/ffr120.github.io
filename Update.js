@@ -447,7 +447,7 @@ class Carrot {
 }
 
 class Project extends Simulation {
-    totalIterations = 50;
+    totalIterations = 500;
 
     interactionTracker = {};
     agentCount = {Fox: 0, Rabbit: 0};
@@ -641,8 +641,8 @@ class Project extends Simulation {
     }
 
     EndCondition() {
-        //return this.iteration == this.totalIterations;
-        return this.agentCount.Fox == 0 || this.agentCount.Rabbit == 0;
+        return this.iteration == this.totalIterations;
+        // return this.agentCount.Fox == 0 || this.agentCount.Rabbit == 0;
     }
 
     End() {
@@ -742,11 +742,71 @@ class Project extends Simulation {
     }
 }
 
+class JakobMassSimulation extends MassSimulation {
+
+    data = {};
+    foxCountList = {};
+    tList = {};
+    rabbitCountList = {};
+    constructor(simulations, runs, repeats) {
+        super(simulations, runs * repeats);
+        this.repeats = repeats;
+        Vicsek.influence = 0;
+    }
+
+    BetweenRuns() {
+
+        console.log("new viscek influence");
+        console.log(Vicsek.influence);
+
+        Vicsek.influence = Math.floor((this.run - 1)/this.repeats) * .5;
+        let influence = Round(Vicsek.influence, 1)
+        if(!this.data[influence])
+            this.data[influence] = 0;
+
+        this.data[influence] += this.simulations[this.current].t;
+
+        // Update time list
+        if (!this.tList[influence]) {
+            this.tList[influence] = [];
+        }
+        this.tList[influence].push(copy(this.simulations[this.current].T));
+
+        // Update fox count list
+        if (!this.foxCountList[influence]) {
+            this.foxCountList[influence] = [];
+        }
+        this.foxCountList[influence].push(copy(this.simulations[this.current].foxCount));
+
+        // Update fox count list
+        if (!this.rabbitCountList[influence]) {
+            this.rabbitCountList[influence] = [];
+        }
+        this.rabbitCountList[influence].push(copy(this.simulations[this.current].rabbitCount));
+    }
+
+    BetweenSimulations() {
+
+    }
+
+    End() {
+
+        console.log("Downloading json");
+        DownloadJSON(
+            {
+                T: this.tList,
+                foxCount: this.foxCountList,
+                rabbitCount: this.rabbitCountList,
+            },
+            "countData"
+        )
+    }
+}
 
 
 function Start() {
     let simulations = [new Project(new Vec2(50, 50), 4000, 4000, 500, 500, 1)];
-    new ProjectMassSimulation(simulations, 3, 3);
+    new JakobMassSimulation(simulations, 3, 5);
 }
 
 function Update() {
