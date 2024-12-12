@@ -446,6 +446,7 @@ class Carrot {
 }
 
 class Project extends Simulation {
+    totalIterations = 50;
 
     interactionTracker = {};
     agentCount = {Fox: 0, Rabbit: 0};
@@ -639,7 +640,8 @@ class Project extends Simulation {
     }
 
     EndCondition() {
-        return this.agentCount.Fox == 0 || this.agentCount.Rabbit == 0;
+        return this.iteration == this.totalIterations;
+        // return this.agentCount.Fox == 0 || this.agentCount.Rabbit == 0;
     }
 
     End() {
@@ -742,6 +744,9 @@ class Project extends Simulation {
 class ProjectMassSimulation extends MassSimulation {
 
     data = {};
+    foxCountList = {};
+    tList = {};
+    rabbitCountList = {};
     constructor(simulations, runs, repeats) {
         super(simulations, runs * repeats);
         this.repeats = repeats;
@@ -755,6 +760,24 @@ class ProjectMassSimulation extends MassSimulation {
             this.data[influence] = 0;
 
         this.data[influence] += this.simulations[this.current].t;
+
+        // Update time list
+        if (!this.tList[influence]) {
+            this.tList[influence] = [];
+        }
+        this.tList[influence].push(copy(this.simulations[this.current].T));
+
+        // Update fox count list
+        if (!this.foxCountList[influence]) {
+            this.foxCountList[influence] = [];
+        }
+        this.foxCountList[influence].push(copy(this.simulations[this.current].foxCount));
+
+        // Update fox count list
+        if (!this.rabbitCountList[influence]) {
+            this.rabbitCountList[influence] = [];
+        }
+        this.rabbitCountList[influence].push(copy(this.simulations[this.current].rabbitCount));
     }
 
     BetweenSimulations() {
@@ -762,6 +785,16 @@ class ProjectMassSimulation extends MassSimulation {
     }
 
     End() {
+
+        console.log("Downloading json");
+        DownloadJSON(
+            {
+                T: this.tList,
+                foxCount: this.foxCountList,
+                rabbitCount: this.rabbitCountList,
+            },
+            "countData"
+        )
 
         console.log(this.data)
 
