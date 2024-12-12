@@ -1,6 +1,6 @@
 
 class Vicsek {
-    static influence = 0.02; //0.05;
+    static influence = 0; //0.05;
     static noiseWeight = Math.PI/6;
     static flockRadius = 200;
 }
@@ -44,7 +44,7 @@ class Brain {
             return;
 
 
-        let reward = this.parent["Observe" + agent.constructor.name](agent) / (1 + Brain.distanceBias * distance);
+        let reward = (1 - Vicsek.influence) * this.parent["Observe" + agent.constructor.name](agent) / (1 + Brain.distanceBias * distance);
         if(reward == 0)
             return;
         
@@ -52,6 +52,7 @@ class Brain {
     }
 
     AddReward(reward, orientation) {
+
         if(orientation < 0)
             orientation += Math.PI * 2;
 
@@ -68,7 +69,7 @@ class Brain {
 
             if(prevSegment < 0)
                 prevSegment += this.N;
-
+            
             this.segments[nextSegment].value += reward * Math.exp(-i / (propogationLength * Brain.spreadCoefficient));
 
             if(nextSegment != prevSegment)
@@ -80,7 +81,7 @@ class Brain {
         let sin = 0, cos = 0;
 
         simulation.agents.forEach(agent => {
-            if(agent.constructor.name == "Rabbit" && agent != this) {
+            if(agent.constructor.name == "Rabbit") {
                 if (this.parent.position.periodicDistance(agent.position, simulation.width, simulation.height) < Vicsek.flockRadius) {
                     cos += Math.cos(agent.orientation);
                     sin += Math.sin(agent.orientation);
@@ -133,7 +134,7 @@ class Brain {
         this.segments.forEach(segment => {
             let color = segment.value < 0 ? RGB(-segment.value * scale, 0, 0, .4) : RGB(0, segment.value * scale, 0, .4);
 
-            let w = 10e-6 + 12 * (segment.value - min)/del;
+            let w = (10e-6 + 12 * (segment.value - min)/del) * this.parent.parent.scale;
 
             Circle(position, radius + w/2, {stroke: color, begin: segment.orientation - segment.width + .01, end: segment.orientation + segment.width - .01, lineWidth: w, onCamera: this.parent.parent.camera})
         });
@@ -148,13 +149,13 @@ class Agent {
     alive = true;
     cooldowns = { reproductionCooldown: 0, lifeTime: this.constructor.lifeTime};
     turnSpeed = Math.PI/2;
-    orientation = Math.random() * Math.PI * 2;
-    targetOrientation = Math.random() * Math.PI * 2;
 
-    constructor(parent, position) {
-
+    constructor(parent, position, orientation = Math.random() * 2 * Math.PI) {
         this.parent = parent;
         this.position = position;
+        this.velocity = this.constructor.velocity;
+        this.orientation = orientation;
+        this.targetOrientation = orientation;
         this.ID = Agent.IDs++;
         this.brain = new Brain(this);
         ++parent.agentCount[this.constructor.name];
@@ -213,7 +214,7 @@ class Agent {
     }
 
     Walk(dt) {
-        this.newPosition = this.position["+"](this.constructor.velocity * Math.cos(this.orientation) * dt, this.constructor.velocity * Math.sin(this.orientation) * dt);
+        this.newPosition = this.position["+"](this.velocity * Math.cos(this.orientation) * dt, this.velocity * Math.sin(this.orientation) * dt);
     }
 
     SetPosition(simulation) {
@@ -310,8 +311,10 @@ class Agent {
         if(object.constructor.name == "Carrot")
             object.respawnCooldown = Carrot.growthDelay;
 
-        if(object.constructor.name == "Rabbit")
+        if(object.constructor.name == "Rabbit") {
             this.parent.deathCause.eaten++;
+            this.cooldowns.predationCooldown = this.constructor.predationCooldown;
+        }
 
         this.cooldowns["lifeTime"] += object.constructor.nutritionValue;
     }
@@ -325,7 +328,7 @@ class Rabbit extends Agent {
     static visionRadius = 0;
 
     static reproductionChance = .6;
-    static reproductionCooldown = 3 * Agent.reproductionDamper * this.reproductionChance;
+    static reproductionCooldown = Agent.reproductionDamper * this.reproductionChance/3;
     
     static lifeTime = 60;
 
@@ -335,8 +338,8 @@ class Rabbit extends Agent {
     static nutritionValue = 60;
     static birthCost = 20;
 
-    constructor(parent, position) {
-        super(parent, position);
+    constructor(parent, position, orientation) {
+        super(parent, position, orientation);
     }
 
     Tick(simulation) {
@@ -378,13 +381,17 @@ class Fox extends Agent {
     static birthCost = 30;
 
     static eatChance = .8;
+    static predationCooldown = Fox.reproductionCooldown/5;
 
-    constructor(parent, position) {
-        super(parent, position);
+    constructor(parent, position, orientation) {
+        super(parent, position, orientation);
+        this.cooldowns.predationCooldown = Fox.predationCooldown;
     }
 
     Tick(simulation) {
-
+        if(this.cooldowns.predationCooldown > 0)
+            this.velocity = 0;
+        else this.velocity = Fox.velocity;
     }
 
     ObserveFox(agent) {
@@ -412,7 +419,6 @@ class Carrot {
     constructor(parent, position) {
         this.parent = parent;
         this.position = position;
-        this.orientation = Math.random() * 2 * Math.PI;
     }
 
     Tick(simulation) {
@@ -442,11 +448,11 @@ class Project extends Simulation {
     agentCount = {Fox: 0, Rabbit: 0};
     deathCause = {starvation: 0, eaten: 0};
     agents = [];
-    dt = 0;
+    dt = .1;
 
-    nFoxes = 0;
-    nRabbits = 2;
-    nCarrots = 0;
+    nFoxes = 5;
+    nRabbits = 100;
+    nCarrots = 50;
 
     interactionCooldown = 8;
     carrots = [];
@@ -457,24 +463,39 @@ class Project extends Simulation {
     eaten = [];
     starvation = [];
 
+    initialCarrots = [];
+    initialRabbits = [];
+    initialFoxes = [];
+    run = 0;
 
     constructor(position, width, height, windowWidth, windowHeight, updatesPerTick) {
         super(position, width, height, windowWidth, windowHeight, "Inbreeding Simulator", updatesPerTick);
 
-        for(let i = 0; i < this.nCarrots; ++i)
-            this.carrots.push(new Carrot(this, new Vec2(Math.random() * this.width, Math.random() * this.height)));
+        for(let i = 0; i < this.nCarrots; ++i) {
+            let position = new Vec2(Math.random() * this.width, Math.random() * this.height);
+            this.carrots.push(new Carrot(this, position));
+            this.initialCarrots.push(position.copy());
+        }
 
-        for(let i = 0; i < this.nRabbits; ++i)
-            this.agents.push(new Rabbit(this, new Vec2(Math.random() * this.width, Math.random() * this.height)));
+        for(let i = 0; i < this.nRabbits; ++i) {
+            let position = new Vec2(Math.random() * this.width, Math.random() * this.height);
+            let orientation = Math.random() * Math.PI * 2;
+            this.agents.push(new Rabbit(this, position, orientation));
+            this.initialRabbits.push({position: position.copy(), orientation: orientation});
+        }
 
-        for(let i = 0; i < this.nFoxes; ++i)
-            this.agents.push(new Fox(this, new Vec2(Math.random() * this.width, Math.random() * this.height)));
+        for(let i = 0; i < this.nFoxes; ++i) {
+            let position = new Vec2(Math.random() * this.width, Math.random() * this.height);
+            let orientation = Math.random() * Math.PI * 2;
+            this.agents.push(new Fox(this, position, orientation));
+            this.initialFoxes.push({position: position.copy(), orientation: orientation});
+        }
 
         this.plot = new LinePlot(
             this.position["+"](100, this.windowHeight + 100),
             400,
             400,
-            "Population vs Time",
+            "Population vs Time, Visek = " + Vicsek.influence,
             "Time",
             "Population",
             [
@@ -495,53 +516,73 @@ class Project extends Simulation {
             ]
         )
 
-        new LinePlot(
-            this.position["+"](600, this.windowHeight + 100),
-            400,
-            400,
-            "Death by Cause vs Time",
-            "Time",
-            "Deaths",
-            [
-                {
-                    data: [this.T, this.starvation],
-                    props: {
-                        label: "Starvation",
-                        color: "orange"
-                    }
-                },
-                {
-                    data:[this.T, this.eaten],
-                    props: {
-                        label: "Eaten",
-                        color: "green",
-                    }
-                },
-            ]
-        )
+        // new LinePlot(
+        //     this.position["+"](600, this.windowHeight + 100),
+        //     400,
+        //     400,
+        //     "Death by Cause vs Time",
+        //     "Time",
+        //     "Deaths",
+        //     [
+        //         {
+        //             data: [this.T, this.starvation],
+        //             props: {
+        //                 label: "Starvation",
+        //                 color: "orange"
+        //             }
+        //         },
+        //         {
+        //             data:[this.T, this.eaten],
+        //             props: {
+        //                 label: "Eaten",
+        //                 color: "green",
+        //             }
+        //         },
+        //     ]
+        // )
     
         new DynamicVariable(this.position["+"](this.windowWidth + 30, 20), this, "updatesPerTick", 0, 10, 1);
-        new DynamicVariable(this.position["+"](this.windowWidth + 30, 60), this, "dt", 0, 0.2, 0.01);
+        new DynamicVariable(this.position["+"](this.windowWidth + 30, 60), this, "dt", 0, 0.5, 0.1);
         new DynamicVariable(this.position["+"](this.windowWidth + 30, 100), Rabbit, "visionRadius", 0, 500, 50, "Rabbit Vision Range");
         new DynamicVariable(this.position["+"](this.windowWidth + 30, 140), Fox, "visionRadius", 0, 500, 50, "Fox Vision Range");
         new DynamicVariable(this.position["+"](this.windowWidth + 30, 180), Brain, "distanceBias", 0, 1, 0.01, "Distance Bias");
         new DynamicVariable(this.position["+"](this.windowWidth + 30, 220), Brain, "spreadCoefficient", 0.01, 1, 0.01, "Spread Coefficient");
 
     }
+
+    Reset() {
+
+        this.plot.title = "Population vs Time, Visek = " + Vicsek.influence;
+        
+        this.agents.length = 0;
+        this.carrots.length = 0;
+
+        this.interactionTracker = {};
+        this.agentCount = {Fox: 0, Rabbit: 0};
+        this.deathCause = {starvation: 0, eaten: 0};
+        this.foxCount.length = 0;
+        this.rabbitCount.length = 0;
+        this.T.length = 0;
+        this.eaten.length = 0;
+        this.starvation.length = 0;
+
+        this.initialRabbits.forEach(rabbit => {
+            this.agents.push(new Rabbit(this, rabbit.position.copy(), rabbit.orientation));
+        });
+
+        this.initialFoxes.forEach(fox => {
+            this.agents.push(new Fox(this, fox.position, fox.orientation));
+        });
+
+        this.initialCarrots.forEach(carrot => this.carrots.push(new Carrot(this, carrot)));
+        
+    }
     
     Tick() {
 
-        if(Keyboard.KeyDown("1"))
-            this.fox.cooldowns["lifeTime"] = Rabbit.lifeTime;
+        if(Keyboard.KeyUp("1"))
+            Simulation.Reset(this);
         
-        if(Keyboard.KeyDown("2"))
-            this.fox.cooldowns["lifeTime"] = Rabbit.lifeTime * .74;
-        
-        if(Keyboard.KeyDown("3"))
-            this.fox.cooldowns["lifeTime"] = Rabbit.lifeTime * .5;
-        
-        if(Keyboard.KeyDown("4"))
-            this.fox.cooldowns["lifeTime"] = Rabbit.lifeTime * .25;
 
         this.ResetInteractions();
         this.agents.forEach(agent => Agent.Tick(this, agent));
@@ -605,27 +646,27 @@ class Project extends Simulation {
     }
 
     EndCondition() {
-        return false;
+        return this.agentCount.Fox == 0 || this.agentCount.Rabbit == 0;
     }
 
     End() {
-        DownloadJSON(
-            {
-                T: this.T,
-                foxCount: this.foxCount,
-                rabbitCount: this.rabbitCount,
-            },
-            "countData"
-        )
+        // DownloadJSON(
+        //     {
+        //         T: this.T,
+        //         foxCount: this.foxCount,
+        //         rabbitCount: this.rabbitCount,
+        //     },
+        //     "countData"
+        // )
 
-        StoreImage(this.plot)
+        //StoreImage(this.plot)
     }
 
     Title() {
         let str = "";
         for(let type in this.agentCount)
             str += type + ": " + this.agentCount[type] + " ";
-        return this.title + ", Iteration: " + this.iteration + ", " + str;
+        return this.title + ", Iteration: " + this.iteration + ", " + str + ", Vicsek = " + Vicsek.influence;
     }
 
     Draw() {
@@ -705,12 +746,69 @@ class Project extends Simulation {
     }
 }
 
+class ProjectMassSimulation extends MassSimulation {
+
+    data = [];
+    constructor(simulations, runs, repeats) {
+        super(simulations, runs * repeats);
+        this.repeats = repeats;
+    }
+
+    BetweenRuns() {
+
+        Vicsek.influence = Math.floor((this.run - 1)/this.repeats) * .1;
+        let influence = Round(Vicsek.influence, 1)
+        if(!this.data[influence])
+            this.data[influence] = 0;
+
+        this.data[influence] += this.simulations[this.current].t;
+    }
+
+    BetweenSimulations() {
+
+    }
+
+    End() {
+
+        console.log(this.data)
+
+        let V = [];
+        let T = [];
+        for(let prop in this.data) {
+            V.push(prop);
+            T.push(this.data[prop]/this.repeats);
+        }
+
+        StoreImage(new LinePlot(
+            new Vec2(500, 500),
+            400,
+            400,
+            "Simulation Time vs Vicsek Influence",
+            "Vicsek Influence",
+            "Time",
+            [
+                {
+                    data: [V, T],
+                    props: {
+                        color: "orange"
+                    }
+                },
+            ],
+            {
+                roundX: 1
+            }
+        ));
+    }
+}
+
 function Start() {
-    new Project(new Vec2(50, 50), 500, 500, 1000, 1000, 1)
+    new Project(new Vec2(50, 50), 4000, 4000, 500, 500, 1);
+    //new ProjectMassSimulation(simulations, 4, 2);
 }
 
 function Update() {
     
+    MassSimulation.Tick()
     DynamicVariable.instances.forEach(instance => instance.Tick());
     Simulation.Tick();
     Plot.Tick();

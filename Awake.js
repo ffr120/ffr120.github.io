@@ -33,7 +33,7 @@ function DisplayFPS() {
 function Reset() {
 
 
-    Rectangle(new Vec2(0, 0), canvas.width, canvas.height, {fill: "white"});
+    Rectangle(new Vec2(0, 0), canvas.width, canvas.height, {fill: "rgb(243, 240, 240, 1)"});
     DisplayFPS();
     
     Button.instances.forEach(instance => instance.Tick());

@@ -365,11 +365,27 @@ class MassSimulation {
         this.runs = runs;
 
         this.simulations.forEach(simulation => simulation.paused = true);
+
+        this.SetStates();
         MassSimulation.instances.push(this);
     }
 
     static Tick() {
         this.instances.forEach(instance => instance.Tick());
+    }
+
+    SetStates() {
+
+
+        for(let i = 0; i < this.simulations.length; ++i) {
+            this.simulations[i].paused = true;
+            this.simulations[i].draw = false;
+        }
+
+        if(this.current < this.simulations.length) {
+            this.simulations[this.current].paused = false;
+            this.simulations[this.current].draw = true;
+        }
     }
 
     Tick() {
@@ -383,24 +399,28 @@ class MassSimulation {
         }
 
         if(this.simulations[this.current].running == false) {
-            if(++this.run < this.runs)
+            if(++this.run < this.runs) {
+                this.BetweenRuns();
                 Simulation.Reset(this.simulations[this.current]);
+            }
             else {
-                this.Between();
+                this.BetweenSimulations();
                 this.run = 0;
                 ++this.current;
+                this.SetStates();
             }
         }
+    }
 
-        for(let i = 0; i < this.simulations.length; ++i) {
-            this.simulations[i].paused = true;
-            this.simulations[i].draw = false;
-        }
+    BetweenRuns() {
 
-        if(this.current < this.simulations.length) {
-            this.simulations[this.current].paused = false;
-            this.simulations[this.current].draw = true;
-        }
+    }
+
+    BetweenSimulations() {
+
+    }
+
+    End() {
 
     }
 }
@@ -519,6 +539,7 @@ class Simulation {
     }
 
     static Reset(instance) {
+        instance.t = 0;
         instance.iteration = 0;
         instance.running = true;
         instance.Reset();
