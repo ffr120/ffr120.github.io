@@ -447,7 +447,7 @@ class Carrot {
 }
 
 class Project extends Simulation {
-    totalIterations = 500;
+    totalIterations = 1000;
 
     interactionTracker = {};
     agentCount = {Fox: 0, Rabbit: 0};
@@ -756,11 +756,13 @@ class JakobMassSimulation extends MassSimulation {
 
     BetweenRuns() {
 
+
+        let influence = Round(Vicsek.influence, 1)
+
         console.log("new viscek influence");
         console.log(Vicsek.influence);
 
-        Vicsek.influence = Math.floor((this.run - 1)/this.repeats) * .5;
-        let influence = Round(Vicsek.influence, 1)
+        // Update simulation time data
         if(!this.data[influence])
             this.data[influence] = 0;
 
@@ -783,6 +785,9 @@ class JakobMassSimulation extends MassSimulation {
             this.rabbitCountList[influence] = [];
         }
         this.rabbitCountList[influence].push(copy(this.simulations[this.current].rabbitCount));
+
+        Vicsek.influence = Math.floor((this.run)/this.repeats) * .5;
+
     }
 
     BetweenSimulations() {
