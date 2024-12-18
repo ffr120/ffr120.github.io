@@ -748,6 +748,9 @@ class JakobMassSimulation extends MassSimulation {
     foxCountList = {};
     tList = {};
     rabbitCountList = {};
+    starvationList = {};
+    eatenList = {};
+
     constructor(simulations, runs, repeats) {
         super(simulations, runs * repeats);
         this.repeats = repeats;
@@ -788,6 +791,18 @@ class JakobMassSimulation extends MassSimulation {
 
         Vicsek.influence = Math.floor((this.run)/this.repeats) * .5;
 
+        // Update starvation list
+        if (!this.starvationList[influence]) {
+            this.starvationList[influence] = [];
+        }
+        this.starvationList[influence].push(copy(this.simulations[this.current].starvation));
+
+        // Update eaten list
+        if (!this.eatenList[influence]) {
+            this.eatenList[influence] = [];
+        }
+        this.eatenList[influence].push(copy(this.simulations[this.current].eaten));
+
     }
 
     BetweenSimulations() {
@@ -802,6 +817,8 @@ class JakobMassSimulation extends MassSimulation {
                 T: this.tList,
                 foxCount: this.foxCountList,
                 rabbitCount: this.rabbitCountList,
+                starvation: this.starvationList,
+                eaten: this.eatenList,
             },
             "countData"
         )
