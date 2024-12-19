@@ -63,6 +63,7 @@ class Mouse {
         this.move["="](this.position["-"](this.previousPosition));
         this.previousPosition["="](this.position);
         this.scroll = 0;
+        move = null;
     }
 
     static Convert(key) {
@@ -84,3 +85,50 @@ onmousewheel = (event) => {
     Mouse.scroll = event.deltaY;
     Mouse.position["="]({x: event.clientX + window.scrollX, y: event.clientY + window.scrollY});
 }
+
+let pos = null, last = null, move = null;
+let initialDistance = null;
+let change = null;
+
+function calculateDistance(touches) {
+    const [touch1, touch2] = touches;
+    const dx = touch2.clientX - touch1.clientX;
+    const dy = touch2.clientY - touch1.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+document.addEventListener("touchstart", (event) => {
+    if (event.touches.length === 2) {
+        // Two fingers detected
+        initialDistance = calculateDistance(event.touches);
+    }
+});
+
+document.addEventListener("touchmove", (event) => {
+    if (event.touches.length === 2 && initialDistance) {
+        const currentDistance = calculateDistance(event.touches);
+        change = currentDistance - initialDistance;
+        initialDistance = currentDistance; // Update the distance
+        
+        pos = new Vec2((event.touches[0].clientX + event.touches[1].clientX)/2, (event.touches[0].clientY + event.touches[1].clientY)/2);
+        if(last)
+            move = pos["-"](last);
+        last = pos.copy();
+    }
+    else if(event.touches.length == 1) {
+        pos = new Vec2(event.touches[0].clientX, event.touches[0].clientY);
+        if(last)
+            move = pos["-"](last);
+        last = pos.copy();
+    }
+});
+
+document.addEventListener("touchend", (event) => {
+    if (event.touches.length < 2) {
+        // Reset when fingers are lifted
+        initialDistance = null;
+        change = null;
+        pos = null;
+        last = null;
+    }
+});

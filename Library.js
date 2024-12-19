@@ -80,9 +80,11 @@ class Vec2 {
         }
     }
 
-    "*"(v) {
+    "*"(v, y) {
         if(typeof(v) == "object")
             return new Vec2(this.x * v.x, this.y * v.y, this.parent);
+        else if(y != undefined)
+            return new Vec2(this.x * v, this.y * y, this.parent);
         return new Vec2(this.x * v, this.y * v, this.parent);
     }
 
@@ -324,12 +326,27 @@ function RandomColor(alpha) {
     return RGB(Math.random() * 255, Math.random() * 255, Math.random() * 255, Math.random() * 255, alpha);
 }
 
-function Variance(X) {
-    let v = 0;
-    X.forEach(x => v += Math.pow(x, 2));
-    v /= X.length;
+function Average(X) {
+    if (X.length === 0) return 0; // Handle empty array
+    let sum = 0;
+    X.forEach(x => sum += x);
+    return sum / X.length;
+}
 
-    return v;
+function STD(X) {
+    if (X.length === 0) return 0; // Handle empty array
+    const mean = Average(X);
+    let sumSquaredDiff = 0;
+    X.forEach(x => sumSquaredDiff += Math.pow(x - mean, 2));
+    return Math.sqrt(sumSquaredDiff / X.length);
+}
+
+function Variance(X) {
+    if (X.length === 0) return 0; // Handle empty array
+    const mean = Average(X);
+    let sumSquaredDiff = 0;
+    X.forEach(x => sumSquaredDiff += Math.pow(x - mean, 2));
+    return sumSquaredDiff / X.length;
 }
   
 function AngleBetween(x, y) {
@@ -447,10 +464,16 @@ class Camera {
 
     Tick() {
         if(Mouse.KeyDown("right"))
-            this.position["+="](Mouse.move["*"](this.parent.width/(this.zoom * this.parent.windowHeight)));
+            this.position["+="](Mouse.move["*"](this.parent.width/(this.zoom * this.parent.windowWidth), this.parent.height/(this.zoom * this.parent.windowHeight)));
+
+        if(move)
+            this.position["+="](move["*"](this.parent.width/(this.zoom * this.parent.windowWidth), this.parent.height/(this.zoom * this.parent.windowHeight)));
 
         if(Mouse.scroll) 
             this.zoom *=  Math.pow(0.8, Math.sign(Mouse.scroll));
+
+        if(initialDistance)
+            this.zoom += change * 0.01;
 
         if(this.zoom < Camera.minZoom)
             this.zoom = Camera.minZoom;
@@ -465,8 +488,8 @@ class Camera {
             this.position.x = this.origin.x - this.parent.width/(2 * this.zoom);
         }
 
-        if(this.origin.y - this.position.y + this.parent.height/(2 * this.zoom) > this.parent.width)
-            this.position.y = -(this.parent.width - this.parent.height/(2 * this.zoom) - this.origin.y)
+        if(this.origin.y - this.position.y + this.parent.height/(2 * this.zoom) > this.parent.height)
+            this.position.y = -(this.parent.height - this.parent.height/(2 * this.zoom) - this.origin.y)
 
 
         else if(this.origin.y - this.position.y - this.parent.height/(2 * this.zoom) < 0) {
@@ -476,7 +499,7 @@ class Camera {
 
     InSpace(position) {
 
-        let p = position["-"](this.parent.position)["*"](this.parent.width/this.parent.windowWidth);
+        let p = position["-"](this.parent.position)["*"](this.parent.width/this.parent.windowWidth, this.parent.height/this.parent.windowHeight);
 
         let diff = p["-"](this.origin)["*"](1/this.zoom);
         return this.origin["-"](this.position)["+"](diff);
@@ -485,16 +508,18 @@ class Camera {
     Draw() {
         if(this.zoom > 1) {
             
-            let barLength = this.parent.windowWidth - 40;
-            let l = barLength / (2 * this.zoom);
-            let x = barLength * (0.5 - this.position.x / this.parent.width);
-            let y = barLength * (0.5 - this.position.y / this.parent.height);
+            let width = this.parent.windowWidth - 40;
+            let height = this.parent.windowHeight - 40;
+            let w = width / (2 * this.zoom);
+            let h = height / (2 * this.zoom);
+            let x = width * (0.5 - this.position.x / this.parent.width);
+            let y = height * (0.5 - this.position.y / this.parent.height);
             
-            Bar(this.parent.position["+"](10, this.parent.windowHeight - 10), barLength, 10, {fill: "rgb(0, 0, 0, .4)"})
-            Bar(this.parent.position["+"](10 + x - l, this.parent.windowHeight - 10), l * 2, 10, {fill: "rgb(0, 0, 0, .4)"})
+            Bar(this.parent.position["+"](10, this.parent.windowHeight - 10), width, 10, {fill: "rgb(0, 0, 0, .4)"})
+            Bar(this.parent.position["+"](10 + x - w, this.parent.windowHeight - 10), w * 2, 10, {fill: "rgb(0, 0, 0, .4)"})
 
-            Bar(this.parent.position["+"](this.parent.windowWidth - 10, 10), 10, barLength, {fill: "rgb(0, 0, 0, .4)"})
-            Bar(this.parent.position["+"](this.parent.windowWidth - 10, 10 + y - l), 10, l * 2, {fill: "rgb(0, 0, 0, .4)"})
+            Bar(this.parent.position["+"](this.parent.windowWidth - 10, 10), 10, height, {fill: "rgb(0, 0, 0, .4)"})
+            Bar(this.parent.position["+"](this.parent.windowWidth - 10, 10 + y - h), 10, h * 2, {fill: "rgb(0, 0, 0, .4)"})
         }
 
         Rectangle(this.parent.position, 100, 20, {fill: "rgb(0, 0, 0, .4)"})
@@ -507,7 +532,6 @@ class Simulation {
     static instances = [];
     static TitleSize = 20;
 
-    scale = 1;
     draw = true;
     paused = false;
     running = true;
@@ -522,7 +546,8 @@ class Simulation {
         this.windowWidth = windowWidth;
         this.windowHeight = windowHeight;
         
-        this.scale = this.windowWidth/this.width;
+        this.scaleX = this.windowWidth/this.width;
+        this.scaleY = this.windowHeight/this.height;
 
         this.title = title;
         this.updatesPerTick = updatesPerTick;
@@ -533,7 +558,7 @@ class Simulation {
     }
 
     RelativePosition(position) {
-        return this.position["+"](position["*"](this.windowWidth/this.width));
+        return this.position["+"](position["*"](this.windowWidth/this.width, this.windowHeight/this.height));
     }
 
     ToggleDraw() {
