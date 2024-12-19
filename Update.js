@@ -242,7 +242,7 @@ class Agent {
 
                 if(this.cooldowns["reproductionCooldown"] <= 0 && agent.cooldowns["reproductionCooldown"] <= 0) {
                     simulation.interactionTracker[interactionID] = simulation.interactionCooldown;
-                    if(Math.random() < this.constructor.reproductionChance) {
+                    if(Math.random() < this.constructor.reproductionChance && simulation.agents.length < 100) {
 
 
                         let newAgent = new this.constructor(simulation, this.position["+"](agent.position)["*"](1/2));
@@ -416,7 +416,7 @@ class Carrot {
     
     static nutritionValue = 30;
     static radius = 10;
-    static growthDelay = 10;
+    static growthDelay = 5;
     respawnCooldown = 0;
 
     alive = true;
@@ -456,7 +456,7 @@ class Project extends Simulation {
     dt = 0.1;
 
     nFoxes = 5;
-    nRabbits = 100;
+    nRabbits = 80;
     nCarrots = 100;
 
     interactionCooldown = 8;
@@ -666,6 +666,7 @@ class Project extends Simulation {
 
     Draw() {
 
+        Text(new Vec2(100, 100), 20, this.agents.length, {color: "black"})
         if(!this.draw)
             return; 
         
@@ -1157,17 +1158,11 @@ class ProjectMassSimulation extends MassSimulation {
 function Start() {
 
 
-    let w, h;
-    if(canvas.width > canvas.height) {
-        h = 3000;
-        w = h * canvas.width / canvas.height;
-    }
-    else {
-        w = 3000;
-        h = w * canvas.height/canvas.width;
-    }
-    let simulations = [new Project(new Vec2(0, 0), w, h, canvas.width, canvas.height, 1)];
-    new ProjectMassSimulation(simulations, 11, 30);
+    let area = 20000000;
+    let scale = canvas.width/canvas.height;
+    let h = Math.round(Math.sqrt(area/scale));
+    let w = Math.round(h * scale);
+    new Project(new Vec2(0, 0), w, h, canvas.width, canvas.height, 1)
 
         // let X = [];
         // let Y = [];

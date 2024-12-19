@@ -506,10 +506,11 @@ class Camera {
     }
 
     Draw() {
-        if(this.zoom > 1) {
+        if(this.zoom > 0) {
             
             let width = this.parent.windowWidth - 40;
             let height = this.parent.windowHeight - 40;
+            
             let w = width / (2 * this.zoom);
             let h = height / (2 * this.zoom);
             let x = width * (0.5 - this.position.x / this.parent.width);
