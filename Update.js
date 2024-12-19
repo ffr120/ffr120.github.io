@@ -3,7 +3,7 @@ class Vicsek {
     static weight = 0.05;
     static noise = Math.PI / 6;
     static flockRadius = 200;
-    static influence = 0.8;
+    static influence = 0.5;
 }
 
 class BrainSegment {

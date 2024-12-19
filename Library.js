@@ -523,8 +523,8 @@ class Camera {
             Bar(this.parent.position["+"](this.parent.windowWidth - 10, 10 + y - h), 10, h * 2, {fill: "rgb(0, 0, 0, .4)"})
         }
 
-        Rectangle(this.parent.position, 100, 20, {fill: "rgb(0, 0, 0, .4)"})
-        Text(this.parent.position["+"](50, 10), 10, "Zoom: " + Round(this.zoom * 100, 0) + "%", {color: "white", align: "center", justify: "center"})
+        Rectangle(this.parent.position, 100, 25, {fill: "rgb(0, 0, 0, .4)"})
+        Text(this.parent.position["+"](50, 12.5), 12, "Zoom: " + Round(this.zoom * 100, 0) + "%", {color: "white", align: "center", justify: "center"})
     }
 }
 
@@ -553,10 +553,22 @@ class Simulation {
         this.title = title;
         this.updatesPerTick = updatesPerTick;
         this.camera = new Camera(this);
-        new Button(this.position["+"](100, 0), 40, 40, new FunctionCaller(this, this.ToggleDraw), './drawIcon.png');
-        new Button(this.position["+"](140, 0), 40, 40, new FunctionCaller(this, this.TogglePause), './pause.png');
+        //new Button(this.position["+"](100, 0), 40, 40, new FunctionCaller(this, this.ToggleDraw), './drawIcon.png');
+        new Button(this.position["+"](100, 0), 50, 50, new FunctionCaller(this, this.TogglePause), './pause.png');
+        
+       
+
+        Button.Connect([
+            new Button(this.position["+"](0, 52), 50, 50, new FunctionCaller(this, this.SetVicsek, 0), './flockSmall.png'),
+            new Button(this.position["+"](50, 52), 50, 50, new FunctionCaller(this, this.SetVicsek, .7), './flockMedium.png'),
+            new Button(this.position["+"](100, 52), 50, 50, new FunctionCaller(this, this.SetVicsek, 1), './flockLarge.png')
+        ]);
 
         Simulation.instances.push(this);
+    }
+
+    SetVicsek(value) {
+        Vicsek.influence = value;
     }
 
     TogglePause() {
@@ -642,12 +654,21 @@ class Button {
         Button.instances.push(this);
     }
 
+    static Connect(buttons, init = 0) {
+        buttons[init].pressed = true;
+        buttons.forEach(button => {
+            button.connections = buttons;
+        });
+    }
+
     Tick() {
 
         this.hover = InRectangle(this.position, this.width, this.height, Mouse.position);
 
         if(this.hover && Mouse.KeyUp("left")) {
             this.func.Call();
+            if(this.connections)
+                this.connections.forEach(button => button.pressed = false);
             this.pressed = this.pressed ? false : true;
         }
     }
@@ -656,11 +677,11 @@ class Button {
     Draw() {
         
         if(this.pressed)
-            Rectangle(this.position, this.width, this.height, {fill: "rgb(250, 0, 0, .4)"});
+            Rectangle(this.position, this.width, this.height, {fill: "rgb(0, 250, 0, .4)"});
         else Rectangle(this.position, this.width, this.height, {fill: "rgb(0, 0, 250, .4)"});
 
-        if(this.hover)
-            Rectangle(this.position, this.width, this.height, {fill: "rgb(250, 250, 250, .4)"})
+        // if(this.hover)
+        //     Rectangle(this.position, this.width, this.height, {fill: "rgb(250, 250, 250, .4)"})
 
         if(this.image)
             Photo(this.position["+"](this.width/2, this.height/2), this.width/3, this.height/3, 0, this.image)

@@ -26,8 +26,8 @@ function DisplayFPS() {
         lastFrameTime = now;
     }
 
-    Rectangle(new Vec2(0, 20), 100, 20, {fill: "rgb(0, 0, 0, .4)"});
-    Text(new Vec2(50, 30), 10, "FPS: " + fps, {color: "white", align: "center", justify: "center"})
+    Rectangle(new Vec2(0, 25), 100, 25, {fill: "rgb(0, 0, 0, .4)"});
+    Text(new Vec2(50, 37.5), 12, "FPS: " + fps, {color: "white", align: "center", justify: "center"})
 }
 
 function Reset() {
