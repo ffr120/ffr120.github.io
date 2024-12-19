@@ -1160,10 +1160,10 @@ function Start() {
 
 
     let area = 20000000;
-    let scale = canvas.width/canvas.height;
+    let scale = canvas.width/(canvas.height - 20);
     let h = Math.round(Math.sqrt(area/scale));
     let w = Math.round(h * scale);
-    new Project(new Vec2(0, 0), w, h, canvas.width, canvas.height, 1)
+    new Project(new Vec2(0, 0), w, h, canvas.width, canvas.height - 20, 1)
 
         // let X = [];
         // let Y = [];
