@@ -59,6 +59,8 @@ class Brain {
             orientation += Math.PI * 2;
 
         let segment = Math.floor(this.N * orientation / (Math.PI * 2));
+        if(segment == this.N)
+            segment = 0;
 
         let propogationLength = Math.ceil((this.N - 1)/2);
 
@@ -666,7 +668,6 @@ class Project extends Simulation {
 
     Draw() {
 
-        Text(new Vec2(100, 100), 20, this.agents.length, {color: "black"})
         if(!this.draw)
             return; 
         

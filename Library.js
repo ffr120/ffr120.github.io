@@ -506,7 +506,7 @@ class Camera {
     }
 
     Draw() {
-        if(this.zoom > 0) {
+        if(this.zoom > 1) {
             
             let width = this.parent.windowWidth - 40;
             let height = this.parent.windowHeight - 40;
@@ -553,9 +553,14 @@ class Simulation {
         this.title = title;
         this.updatesPerTick = updatesPerTick;
         this.camera = new Camera(this);
-        new Button(this.position["+"](100, 0), 20, 20, new FunctionCaller(this, this.ToggleDraw));
+        new Button(this.position["+"](100, 0), 40, 40, new FunctionCaller(this, this.ToggleDraw), './drawIcon.png');
+        new Button(this.position["+"](140, 0), 40, 40, new FunctionCaller(this, this.TogglePause), './pause.png');
 
         Simulation.instances.push(this);
+    }
+
+    TogglePause() {
+        this.dt = this.dt == 0 ? 0.1 : 0;
     }
 
     RelativePosition(position) {
@@ -625,9 +630,10 @@ class Simulation {
 
 class Button {
 
-    static image = LoadImage('./drawIcon.png')
     static instances = [];
-    constructor(position, width, height, func) {
+    constructor(position, width, height, func, image) {
+        if(image)
+            this.image = LoadImage(image);
         this.position = position;
         this.width = width;
         this.height = height;
@@ -656,7 +662,8 @@ class Button {
         if(this.hover)
             Rectangle(this.position, this.width, this.height, {fill: "rgb(250, 250, 250, .4)"})
 
-        Photo(this.position["+"](this.width/2, this.height/2), this.width/3, this.height/3, 0, Button.image)
+        if(this.image)
+            Photo(this.position["+"](this.width/2, this.height/2), this.width/3, this.height/3, 0, this.image)
     }
 }
 
